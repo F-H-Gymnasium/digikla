@@ -47,7 +47,7 @@ body {
     align-items: center;
 }
 
-.user-info select, .user-info input, input[type="email"], input[type="password"], input[type="text"], select, label + input {
+.user-info select, .user-info input, input[type="email"], input[type="password"], input[type="text"], label + input {
     padding: 8px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -71,7 +71,7 @@ label {
 
 .content-container {
     padding: 30px;
-    max-width: 1450px;
+    max-width: 1400px;
     margin: 0 auto;
 }
 
@@ -88,20 +88,17 @@ label {
     background: var(--bg-card);
     border-radius: 8px;
     overflow: hidden;
-    margin-top: 10px;
+}
+
+.stunden-tabelle th, .stunden-tabelle td {
+    padding: 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
 }
 
 .stunden-tabelle th {
     background-color: #111827;
     color: var(--primary);
-}
-
-.stunden-tabelle th, .stunden-tabelle td {
-    padding: 12px 14px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle; 
-    line-height: 1.4;       
 }
 
 .stunden-tabelle input {
@@ -191,123 +188,4 @@ select.status-select {
     color: white;
     border: 1px solid var(--border);
     border-radius: 4px;
-}
-
-.fach-haupttext {
-    font-weight: bold;
-    font-size: 15px;
-}
-
-.vertretung-subtext {
-    font-size: 11px;
-    color: var(--warning);
-    margin-top: 3px;        
-    display: block;         
-}
-
-.ausfall-text {
-    font-size: 11px;
-    color: var(--danger);
-    display: block;
-    margin-top: 2px;
-}
-
-/* -------------------------------------------------------------------------- */
-/* ARBEITSBEREICH GRID */
-/* -------------------------------------------------------------------------- */
-.dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1.3fr 1fr;
-    gap: 20px;
-    align-items: start;
-}
-
-@media (max-width: 1050px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.col-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.col-header h3 { margin: 0; }
-
-.dashboard-list {
-    list-style: none;
-    padding: 0;
-    margin: 5px 0 0 0;
-    font-size: 14px;
-}
-
-.dashboard-list li {
-    padding: 8px 12px;
-    background: var(--bg-input);
-    border-left: 4px solid var(--border);
-    margin-bottom: 6px;
-    border-radius: 0 4px 4px 0;
-    display: flex;
-    justify-content: space-between;
-}
-
-#listeEntschuldigt li { border-left-color: var(--success); }
-#listeAbgemeldet li { border-left-color: var(--warning); }
-#listeUnentschuldigt li { border-left-color: var(--danger); }
-
-.mini-tabelle th, .mini-tabelle td {
-    padding: 8px 10px;
-    font-size: 14px;
-}
-
-.todo-box {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.todo-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 14px;
-}
-
-.alert-warning {
-    background-color: rgba(245, 158, 11, 0.12);
-    border: 1px solid var(--warning);
-    color: var(--warning);
-}
-
-.badge-count {
-    background: var(--warning);
-    color: var(--bg-main);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-}
-
-.quick-links-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.class-panel-btn {
-    text-align: left;
-    padding: 12px;
-    font-size: 14px;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-}
-
-.class-panel-btn:hover {
-    border-color: var(--primary);
-    background: rgba(2, 132, 199, 0.1);
 }
