@@ -124,6 +124,13 @@ label {
 .btn-secondary { background: var(--bg-input); color: white; }
 .btn-secondary:hover { background: #475569; }
 
+.btn:disabled {
+    background: #1e293b;
+    color: #64748b;
+    border: 1px solid #334155;
+    cursor: not-allowed;
+}
+
 .detail-top-bar {
     display: flex;
     justify-content: space-between;
