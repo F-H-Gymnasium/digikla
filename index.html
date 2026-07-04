@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Klassenbuch</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>Roblox Klassenbuch</h1>
+        
+        <div class="input-area">
+            <input type="text" id="schuelerName" placeholder="Roblox Username eingeben...">
+            <button onclick="schuelerHinzufuegen()">Hinzufügen</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Schülername</th>
+                    <th>Status</th>
+                    <th>Aktion</th>
+                </tr>
+            </thead>
+            <tbody id="schuelerListe">
+                </tbody>
+        </table>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
