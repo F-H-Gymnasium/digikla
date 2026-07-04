@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digitales Klassenbuch - Portal</title>
+    <title>DigiKla - Portal</title>
     <link rel="stylesheet" href="style.css">
     
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -13,7 +13,7 @@
 <body>
 
     <div id="loginView" class="container" style="max-width: 400px; margin: 100px auto;">
-        <h2 style="color: #0284c7; text-align: center;">Klassenbuch Login</h2>
+        <h2 style="color: #0284c7; text-align: center;">DigiKla Login</h2>
         <div style="display: flex; flex-direction: column; gap: 15px;">
             <input type="email" id="loginEmail" placeholder="E-Mail">
             <input type="password" id="loginPassword" placeholder="Passwort">
@@ -24,7 +24,7 @@
 
     <div id="appView" style="display: none;">
         <header class="main-header">
-            <div class="logo">Klassenbuch Pro</div>
+            <div class="logo">DigiKla</div>
             <div class="user-info">
                 <span id="angemeldeterUser">Lade Profil...</span>
                 <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
@@ -45,6 +45,7 @@
                 <div class="section-header">
                     <h2 id="klassenTitel">Tagesübersicht</h2>
                     <div class="info-badges">
+                        <span id="wochenTypAnzeige" class="status-badge" style="background: var(--primary); margin-right: 15px;">A-Woche</span>
                         <span id="klassenleiterInfo"><strong>Klassenleiter:</strong> Lade...</span>
                     </div>
                 </div>
@@ -72,7 +73,7 @@
                     <h2 id="detailStundeTitel">Stunden-Details</h2>
                     
                     <div id="detailAktionsButtons" style="display: flex; gap: 10px;">
-                        <button id="btnUnterrichtAendern" class="btn btn-secondary" onclick="unterrichtAendernDialog()">Unterricht ändern / Ausfall</button>
+                        <button id="btnUnterrichtAendern" class="btn btn-secondary" onclick="unterrichtAendernDialog()">Unterricht ändern</button>
                         <button id="btnUnterrichtUebernehmen" class="btn btn-secondary" onclick="unterrichtUebernehmenDialog()">Unterricht übernehmen</button>
                         <button id="btnUnterrichtSignieren" class="btn btn-primary" onclick="stundeSignieren()">Unterricht signieren</button>
                         <button id="btnSignumZuruecknehmen" class="btn btn-danger" onclick="signumZuruecknehmen()" style="display:none;">Signum zurücknehmen</button>
@@ -104,16 +105,27 @@
                     <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
                     <h2>Stundenplan bearbeiten</h2>
                 </div>
+                <div class="card" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <label>Wochentag wählen:</label>
+                        <select id="editWochentag" onchange="ladeEditorPlanForDay()">
+                            <option value="1">Montag</option>
+                            <option value="2">Dienstag</option>
+                            <option value="3">Mittwoch</option>
+                            <option value="4">Donnerstag</option>
+                            <option value="5">Freitag</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Wochentyp:</label>
+                        <select id="editWochenTyp" onchange="ladeEditorPlanForDay()">
+                            <option value="A">A-Woche</option>
+                            <option value="B">B-Woche</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="card">
-                    <label>Wochentag wählen:</label>
-                    <select id="editWochentag" onchange="ladeEditorPlanForDay()">
-                        <option value="1">Montag</option>
-                        <option value="2">Dienstag</option>
-                        <option value="3">Mittwoch</option>
-                        <option value="4">Donnerstag</option>
-                        <option value="5">Freitag</option>
-                    </select>
-                    <table class="stunden-tabelle" style="margin-top:20px;">
+                    <table class="stunden-tabelle">
                         <thead>
                             <tr>
                                 <th>Stunde</th>
@@ -185,11 +197,11 @@
                         <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 15px; margin-bottom: 15px;">
                             <div>
                                 <label>Voller Name:</label>
-                                <input type="text" id="setupLehrerName" placeholder="Herr Roit" style="width:100%;">
+                                <input type="text" id="setupLehrerName" placeholder="Lehrername" style="width:100%;">
                             </div>
                             <div>
                                 <label>Kürzel:</label>
-                                <input type="text" id="setupLehrerKuerzel" placeholder="ROIT" style="width:100%;">
+                                <input type="text" id="setupLehrerKuerzel" placeholder="Kürzel" style="width:100%;">
                             </div>
                             <div>
                                 <label>User-UID:</label>
