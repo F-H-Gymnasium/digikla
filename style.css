@@ -88,17 +88,20 @@ label {
     background: var(--bg-card);
     border-radius: 8px;
     overflow: hidden;
-}
-
-.stunden-tabelle th, .stunden-tabelle td {
-    padding: 14px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
+    margin-top: 10px;
 }
 
 .stunden-tabelle th {
     background-color: #111827;
     color: var(--primary);
+}
+
+.stunden-tabelle th, .stunden-tabelle td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle; 
+    line-height: 1.4;       
 }
 
 .stunden-tabelle input {
@@ -188,4 +191,24 @@ select.status-select {
     color: white;
     border: 1px solid var(--border);
     border-radius: 4px;
+}
+
+.fach-haupttext {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.vertretung-subtext {
+    font-size: 11px;
+    color: var(--warning);
+    margin-top: 3px;        
+    display: block;         
+    white-space: nowrap;    
+}
+
+.ausfall-text {
+    font-size: 11px;
+    color: var(--danger);
+    display: block;
+    margin-top: 2px;
 }
