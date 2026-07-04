@@ -213,7 +213,7 @@ select.status-select {
 }
 
 /* -------------------------------------------------------------------------- */
-/* DREI SPALTEN GRID SYSTEM (FUXNOTEN-STYLE ARBEITSBEREICH) */
+/* ARBEITSBEREICH GRID */
 /* -------------------------------------------------------------------------- */
 .dashboard-grid {
     display: grid;
