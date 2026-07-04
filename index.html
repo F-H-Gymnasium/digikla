@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digitales Klassenbuch - Management</title>
+    <title>Digitales Klassenbuch - Portal</title>
     <link rel="stylesheet" href="style.css">
     
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -28,6 +28,8 @@
             <div class="user-info">
                 <span id="angemeldeterUser">Lade Profil...</span>
                 <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
+                
+                <span id="schuljahrAnzeige" style="margin-right: 15px; color: var(--warning); font-weight: bold;"></span>
                 
                 <select id="klassenAuswahl" onchange="datenLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
                 
@@ -117,7 +119,7 @@
                         <tbody id="editorStundenBody">
                             </tbody>
                     </table>
-                    <button class="btn btn-primary" style="margin-top:20px;" onclick="speichereStundenplan()">Stundenplan für diesen Tag speichern</button>
+                    <button class="btn btn-primary" style="margin-top:20px;" onclick="speichereStundenplan()">Stundenplan speichern</button>
                 </div>
             </section>
 
@@ -126,7 +128,13 @@
                     <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
                     <h2>Admin-Verwaltung</h2>
                 </div>
-                <div class="detail-grid">
+                
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" id="btnTabKlassen" onclick="wechsleAdminTab('klassen')">Klassen & Schüler</button>
+                    <button class="btn btn-secondary" id="btnTabEinstellungen" onclick="wechsleAdminTab('einstellungen')">Grundeinstellungen</button>
+                </div>
+
+                <div id="adminTabKlassen" class="detail-grid">
                     <div class="card">
                         <h3>Klassen verwalten</h3>
                         <input type="text" id="adminKlassenName" placeholder="z.B. 8rt" style="margin-bottom:10px;"><br>
@@ -139,6 +147,37 @@
                         <input type="text" id="adminSchuelerKlasse" placeholder="Klasse (z.B. 8rt)" style="margin-bottom:10px;"><br>
                         <button class="btn btn-primary" onclick="adminSchuelerAnlegen()">Schüler registrieren</button>
                     </div>
+                </div>
+
+                <div id="adminTabEinstellungen" class="card" style="display: none;">
+                    <h3>Allgemeine Schuldaten</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                        <div>
+                            <label>Schuljahr (z.B. 2025/2026):</label>
+                            <input type="text" id="setupSchuljahr" placeholder="2025/2026" style="width:100%;">
+                        </div>
+                        <div>
+                            <label>Anfangsdatum:</label>
+                            <input type="date" id="setupStartDatum" style="width:100%;">
+                        </div>
+                        <div>
+                            <label>Enddatum:</label>
+                            <input type="date" id="setupEndDatum" style="width:100%;">
+                        </div>
+                    </div>
+
+                    <h3>Unterrichtszeiten definieren (Bis zu 8 Stunden)</h3>
+                    <table class="stunden-tabelle" style="max-width: 500px;">
+                        <thead>
+                            <tr>
+                                <th>Stunde</th>
+                                <th>Zeitspanne (z.B. 07:20 - 08:05)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="setupZeitenBody">
+                            </tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top: 20px;" onclick="speichereGrundeinstellungen()">Grundeinstellungen sichern</button>
                 </div>
             </section>
 
