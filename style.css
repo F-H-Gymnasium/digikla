@@ -123,12 +123,15 @@ label {
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-secondary { background: var(--bg-input); color: white; }
 .btn-secondary:hover { background: #475569; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: #b91c1c; }
 
-.btn:disabled {
-    background: #1e293b;
-    color: #64748b;
-    border: 1px solid #334155;
-    cursor: not-allowed;
+.btn:disabled, textarea:disabled, select:disabled {
+    background: #1e293b !important;
+    color: #64748b !important;
+    border: 1px solid #334155 !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
 }
 
 .detail-top-bar {
