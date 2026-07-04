@@ -17,20 +17,19 @@ let currentUserUID = null;
 let gewaehlteStundeNummer = null;
 let AktuellerTagesPlan = [];
 let GeladeneSchueler = [];
+let LetzteGeoeffneteAnsicht = "dashboard"; // Speichert, ob wir aus Dashboard oder Klassenbuch in Details gehen
 
 let MeinLehrerProfil = { name: "Unbekannter Lehrer", kuerzel: "KST" };
 let GlobalSchuljahrConfig = { start: "", end: "", text: "" };
 let GlobalUnterrichtsZeiten = [];
 let AlleLehrerCache = {}; 
 
-// Hilfsfunktion: Berechnet Kalenderwoche nach DIN ISO 8601
 function getKalenderWoche(dateString) {
     const d = new Date(dateString);
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() + 4 - (d.getDay() || 7));
     const yearStart = new Date(d.getFullYear(), 0, 1);
-    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    return weekNo;
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
 auth.onAuthStateChanged(user => {
@@ -58,7 +57,7 @@ auth.onAuthStateChanged(user => {
                 if(!document.getElementById("aktuellesDatum").value) {
                     document.getElementById("aktuellesDatum").value = new Date().toISOString().split('T')[0];
                 }
-                klassenDropdownLaden();
+                klassenStrukturenLaden();
             });
         });
     } else {
@@ -95,219 +94,269 @@ function ladeAlleLehrerProfile() {
     });
 }
 
-function klassenDropdownLaden() {
+// Lädt alle Klassen für die beiden Reiter im Dashboard
+function klassenStrukturenLaden() {
     const dropdownOben = document.getElementById("klassenAuswahl");
     const dropdownDashboard = document.getElementById("klassenAuswahlDashboard");
     const schnellzugriffContainer = document.getElementById("meineKlassenLinks");
     
     dropdownOben.innerHTML = "";
     schnellzugriffContainer.innerHTML = "";
-    if(dropdownDashboard) dropdownDashboard.innerHTML = '<option value="">-- Klasse wählen --</option>';
+    dropdownDashboard.innerHTML = '<option value="">-- Klasse wählen --</option>';
 
     db.collection("klassen").get().then(snapshot => {
         if(snapshot.empty) return;
-        
-        let ersteKlasse = null;
 
         snapshot.forEach(doc => {
             const klID = doc.id;
             const data = doc.data();
-            if(!ersteKlasse) ersteKlasse = klID;
 
-            // 1. Oben unsichtbares Menü
+            // 1. Für das obere versteckte Dropdown im Klassenbuch
             let opt1 = document.createElement("option");
             opt1.value = klID;
             opt1.innerText = "Klasse " + klID;
             dropdownOben.appendChild(opt1);
 
-            // 2. Rechter Reiter (Stundenplan anderer Klassen)
-            if(dropdownDashboard) {
-                let opt2 = document.createElement("option");
-                opt2.value = klID;
-                opt2.innerText = "Klasse " + klID;
-                dropdownDashboard.appendChild(opt2);
-            }
+            // 2. Zweiter Reiter: Alle Klassen
+            let opt2 = document.createElement("option");
+            opt2.value = klID;
+            opt2.innerText = "Klasse " + klID;
+            dropdownDashboard.appendChild(opt2);
 
-            // 3. Linker Reiter (Eigene Klassen) -> Filtert nach Klassenleiter-UID oder Klassenbesitz
+            // 3. Erster Reiter: Nur Standard-Klassen des Lehrers
             if(data.klassenleiter === currentUserUID || aktuelleRolle === "Admin" || klID === "8rt") {
                 let btn = document.createElement("button");
                 btn.className = "btn btn-secondary class-panel-btn";
                 btn.innerHTML = `📘 Klasse ${klID}`;
-                btn.onclick = () => waehleKlasseDirekt(klID);
+                btn.onclick = () => oeffneSpezifischesKlassenbuch(klID);
                 schnellzugriffContainer.appendChild(btn);
             }
         });
 
-        // Falls kein Schnellzugriff befüllt wurde, Standard-Button einblenden
-        if(schnellzugriffContainer.children.length === 0 && ersteKlasse) {
-            schnellzugriffContainer.innerHTML = `<button class="btn btn-secondary class-panel-btn" onclick="waehleKlasseDirekt('${ersteKlasse}')">📘 Klasse ${ersteKlasse}</button>`;
-        }
-
-        // Standardmäßig die erste Klasse im Speicher aktivieren
-        dropdownOben.value = ersteKlasse;
-        datenLadenAndRendern();
+        zeigeDashboard();
     });
 }
 
-function waehleKlasseDirekt(klasse) {
+function datumGeaendert() {
+    if (document.getElementById("dashboardView").style.display === "block") {
+        arbeitsbereichLadenAndRendern();
+    } else if (document.getElementById("klassenbuchView").style.display === "block") {
+        stundenplanKlasseLadenAndRendern();
+    }
+}
+
+// ==========================================================================
+// ARBEITSBEREICH LOGIK (ALLGEMEINER STARTBILDSCHIRM KLASSENÜBERGREIFEND)
+// ==========================================================================
+function arbeitsbereichLadenAndRendern() {
+    const datumString = document.getElementById("aktuellesDatum").value;
+    const lehrerBody = document.getElementById("lehrerStundenBody");
+    lehrerBody.innerHTML = "";
+    
+    document.getElementById("listeEntschuldigt").innerHTML = "";
+    document.getElementById("listeAbgemeldet").innerHTML = "";
+    document.getElementById("listeUnentschuldigt").innerHTML = "";
+
+    const kw = getKalenderWoche(datumString);
+    const wochenTyp = (kw % 2 !== 0) ? "A" : "B";
+    document.getElementById("wochenTypAnzeige").innerText = `${wochenTyp}-Woche (KW ${kw})`;
+
+    const wochentag = new Date(datumString).getDay();
+    if (wochentag === 0 || wochentag === 6) {
+        lehrerBody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Wochenende</td></tr>";
+        return;
+    }
+
+    let unsigniertGesamt = 0;
+
+    // Wir durchsuchen JEDE Klasse, um die Stunden des aktuellen Lehrers zusammenzusuchen
+    db.collection("klassen").get().then(klassenSnapshot => {
+        let klassenZaehler = klassenSnapshot.size;
+        if(klassenZaehler === 0) return;
+
+        klassenSnapshot.forEach(klasseDoc => {
+            const klasseID = klasseDoc.id;
+            const planId = `${wochentag}_${wochenTyp}`;
+
+            db.collection("klassen").doc(klasseID).collection("stundenplaene").doc(planId).get().then(planDoc => {
+                const stunden = planDoc.exists ? (planDoc.data().stunden || []) : [];
+                
+                let checkStundenPromises = stunden.map(stunde => {
+                    const key = `${klasseID}_${datumString}_Std${stunde.std}`;
+                    
+                    return db.collection("klassenbuch").doc(key).get().then(bDoc => {
+                        const sDaten = bDoc.exists ? bDoc.data() : {};
+                        let aktuellerLehrer = sDaten.vLehrer || stunde.lehrer;
+                        let aktuellesFach = sDaten.vFach || stunde.fach;
+
+                        // Nur laden, wenn der eingeloggte Lehrer diese Stunde unterrichtet
+                        if (aktuellerLehrer === MeinLehrerProfil.kuerzel) {
+                            if (!sDaten.isSigniert) unsigniertGesamt++;
+
+                            let tr = document.createElement("tr");
+                            tr.innerHTML = `
+                                <td><strong>${stunde.std}</strong> <small style='color:#64748b;'>(${stunde.zeit})</small></td>
+                                <td><span class='status-badge' style='background:var(--bg-input);'>${klasseID}</span></td>
+                                <td><span class='fach-haupttext'>${aktuellesFach}</span></td>
+                                <td>${sDaten.isSigniert ? "🔒 Signiert" : "❌ Offen"}</td>
+                                <td><button class='btn btn-primary' style='padding:3px 6px; font-size:12px;' onclick="oeffneDirektAusDashboard('${klasseID}', ${stunde.std})">Öffnen</button></td>
+                            `;
+                            lehrerBody.appendChild(tr);
+                        }
+
+                        // Nebenbei füttern wir die globalen Abwesenheitslisten im Dashboard
+                        if (sDaten.anwesenheit) {
+                            Object.keys(sDaten.anwesenheit).forEach(schueler => {
+                                const status = sDaten.anwesenheit[schueler];
+                                if (status !== "Anwesend") {
+                                    let liId = `abs_${klasseID}_${schueler}`;
+                                    if (!document.getElementById(liId)) {
+                                        let li = document.createElement("li");
+                                        li.id = liId;
+                                        li.innerHTML = `<span><strong>${schueler}</strong> (${klasseID})</span> <small>${status}</small>`;
+                                        if (status === "Entschuldigt") document.getElementById("listeEntschuldigt").appendChild(li);
+                                        if (status === "Verspätet" || status === "Freigestellt") document.getElementById("listeAbgemeldet").appendChild(li);
+                                        if (status === "Unentschuldigt") document.getElementById("listeUnentschuldigt").appendChild(li);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                });
+
+                Promise.all(checkStundenPromises).then(() => {
+                    klassenZaehler--;
+                    if(klassenZaehler === 0) {
+                        document.getElementById("countUnsigniert").innerText = unsigniertGesamt;
+                        if(lehrerBody.innerHTML === "") {
+                            lehrerBody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:#64748b;'>Heute kein Unterricht für dich eingetragen.</td></tr>";
+                        }
+                    }
+                });
+            });
+        });
+    });
+}
+
+function oeffneDirektAusDashboard(klasse, std) {
+    LetzteGeoeffneteAnsicht = "dashboard";
     document.getElementById("klassenAuswahl").value = klasse;
-    datenLadenAndRendern();
+    
+    // Wir müssen die Schüler der Klasse laden, bevor wir das Stunden-Detail öffnen
+    db.collection("schueler").where("klasse", "==", klasse).get().then(snapshot => {
+        GeladeneSchueler = [];
+        snapshot.forEach(d => GeladeneSchueler.push(d.data().name));
+        
+        // Simuliere einen temporären Tagesplan, damit "oeffneStunde" das Fach lesen kann
+        const wochentag = new Date(document.getElementById("aktuellesDatum").value).getDay();
+        const kw = getKalenderWoche(document.getElementById("aktuellesDatum").value);
+        const wochenTyp = (kw % 2 !== 0) ? "A" : "B";
+        
+        db.collection("klassen").doc(klasse).collection("stundenplaene").doc(`${wochentag}_${wochenTyp}`).get().then(pDoc => {
+            AktuellerTagesPlan = pDoc.exists ? (pDoc.data().stunden || []) : [];
+            oeffneStunde(std);
+        });
+    });
+}
+
+// ==========================================================================
+// SPECIFIC KLASSENBUCH LOGIK (WENN EINE KLASSE GEWÄHLT WURDE)
+// ==========================================================================
+function oeffneSpezifischesKlassenbuch(klasseID) {
+    document.getElementById("klassenAuswahl").value = klasseID;
+    hideAllViews();
+    document.getElementById("klassenbuchView").style.display = "block";
+    document.getElementById("klassenAuswahl").style.display = "inline-block"; // Oben Selektor zeigen
+    stundenplanKlasseLadenAndRendern();
 }
 
 function oeffneFremdeKlasse() {
     const wahl = document.getElementById("klassenAuswahlDashboard").value;
-    if(!wahl) {
-        alert("Bitte wähle zuerst eine Klasse aus!");
-        return;
-    }
-    waehleKlasseDirekt(wahl);
+    if(!wahl) return alert("Bitte wähle zuerst eine Klasse aus!");
+    oeffneSpezifischesKlassenbuch(wahl);
 }
 
-function datenLadenAndRendern() {
+function stundenplanKlasseLadenAndRendern() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const datumString = document.getElementById("aktuellesDatum").value;
     const tbody = document.getElementById("tagesStundenBody");
-    
-    // Listen leeren
     tbody.innerHTML = "";
-    document.getElementById("listeEntschuldigt").innerHTML = "<li>Lade...</li>";
-    document.getElementById("listeAbgemeldet").innerHTML = "<li>Lade...</li>";
-    document.getElementById("listeUnentschuldigt").innerHTML = "<li>Lade...</li>";
 
-    if (!klasse || !datumString) return;
+    document.getElementById("klassenTitel").innerText = `Klassenbuch Klasse ${klasse}`;
 
-    if (GlobalSchuljahrConfig.start && GlobalSchuljahrConfig.end) {
-        if (datumString < GlobalSchuljahrConfig.start || datumString > GlobalSchuljahrConfig.end) {
-            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:var(--danger); font-weight:bold;'>Datum liegt außerhalb des Schuljahres!</td></tr>";
-            return;
-        }
-    }
-
-    // A/B-Wochen Ermittlung
     const kw = getKalenderWoche(datumString);
     const wochenTyp = (kw % 2 !== 0) ? "A" : "B";
-    document.getElementById("wochenTypAnzeige").innerText = `${wochenTyp}-Woche (KW ${kw})`;
+    const wochentag = new Date(datumString).getDay();
+
+    if (wochentag === 0 || wochentag === 6) {
+        tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Wochenende</td></tr>";
+        return;
+    }
 
     db.collection("klassen").doc(klasse).get().then(doc => {
         if(doc.exists) {
             const klUID = doc.data().klassenleiter || "";
             let klName = "Keiner";
             if (AlleLehrerCache[klUID]) klName = AlleLehrerCache[klUID].name;
-            document.getElementById("klassenleiterInfo").innerText = `Klasse: ${klasse} | Klassenleiter: ${klName}`;
-            
-            if (aktuelleRolle === "Admin" || currentUserUID === klUID) {
-                document.getElementById("stundenplanEditBtn").style.display = "inline-block";
-            } else {
-                document.getElementById("stundenplanEditBtn").style.display = "none";
-            }
+            document.getElementById("klassenleiterInfo").innerText = `Klassenleiter: ${klName}`;
+            document.getElementById("stundenplanEditBtn").style.display = (aktuelleRolle === "Admin" || currentUserUID === klUID) ? "inline-block" : "none";
         }
     });
 
-    // Abwesenheiten & Schüler verarbeiten
     db.collection("schueler").where("klasse", "==", klasse).get().then(snapshot => {
         GeladeneSchueler = [];
-        let entList = "", abgList = "", uneList = "";
-        let pendingChecks = snapshot.size;
-
-        if(snapshot.empty) {
-            document.getElementById("listeEntschuldigt").innerHTML = "<li style='color:#64748b;'>Keine Schüler</li>";
-            document.getElementById("listeAbgemeldet").innerHTML = "<li style='color:#64748b;'>Keine Schüler</li>";
-            document.getElementById("listeUnentschuldigt").innerHTML = "<li style='color:#64748b;'>Keine Schüler</li>";
-        }
-
-        snapshot.forEach(d => {
-            const name = d.data().name;
-            GeladeneSchueler.push(name);
-
-            // Prüfe den globalen Tagesstatus (Erste Stunde des Tages repräsentativ)
-            const checkKey = `${klasse}_${datumString}_Std1`;
-            db.collection("klassenbuch").doc(checkKey).get().then(bDoc => {
-                const status = (bDoc.exists && bDoc.data().anwesenheit) ? (bDoc.data().anwesenheit[name] || "Anwesend") : "Anwesend";
-                
-                if(status === "Entschuldigt") entList += `<li><span>${name}</span> <small>Ganztägig</small></li>`;
-                if(status === "Freigestellt" || status === "Verspätet") abgList += `<li><span>${name}</span> <small>${status}</small></li>`;
-                if(status === "Unentschuldigt") uneList += `<li><span>${name}</span> <small>Fehlt unentsch.</small></li>`;
-                
-                pendingChecks--;
-                if(pendingChecks === 0) {
-                    document.getElementById("listeEntschuldigt").innerHTML = entList || "<li style='color:#64748b; font-style:italic;'>Keine Einträge</li>";
-                    document.getElementById("listeAbgemeldet").innerHTML = abgList || "<li style='color:#64748b; font-style:italic;'>Keine Einträge</li>";
-                    document.getElementById("listeUnentschuldigt").innerHTML = uneList || "<li style='color:#64748b; font-style:italic;'>Keine Einträge</li>";
-                }
-            }).catch(() => {
-                pendingChecks--;
-            });
-        });
+        snapshot.forEach(d => GeladeneSchueler.push(d.data().name));
     });
 
-    const wochentag = new Date(datumString).getDay(); 
-    if (wochentag === 0 || wochentag === 6) {
-        tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:var(--border);'>Wochenende</td></tr>";
-        return;
-    }
-
-    const planDokumentId = `${wochentag}_${wochenTyp}`;
-
-    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(planDokumentId).get().then(doc => {
+    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(`${wochentag}_${wochenTyp}`).get().then(doc => {
         AktuellerTagesPlan = doc.exists ? (doc.data().stunden || []) : [];
         
         if(AktuellerTagesPlan.length === 0) {
-            tbody.innerHTML = `<tr><td colspan='5' style='text-align:center; color:var(--border);'>Kein Plan für die ${wochenTyp}-Woche definiert.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan='6' style='text-align:center;'>Kein Plan eingetragen.</td></tr>`;
             return;
         }
-
-        let unsigniertCounter = 0;
-        let rowsProcessed = 0;
 
         AktuellerTagesPlan.forEach(stunde => {
             const key = `${klasse}_${datumString}_Std${stunde.std}`;
             db.collection("klassenbuch").doc(key).get().then(bDoc => {
                 const sDaten = bDoc.exists ? bDoc.data() : {};
-                
-                let HTMLFachAnzeige = "";
                 let aktuellerLehrer = sDaten.vLehrer || stunde.lehrer;
-                
-                if(!sDaten.isSigniert && stunde.fach) {
-                    unsigniertCounter++;
-                }
+                let HTMLFachAnzeige = "";
 
                 if (sDaten.istAusfall) {
-                    HTMLFachAnzeige = `<div class="fach-haupttext" style="color:var(--danger); text-decoration:line-through;">${stunde.fach}</div><div class="ausfall-text">(Ausfall)</div>`;
+                    HTMLFachAnzeige = `<div class='fach-haupttext' style='text-decoration:line-through; color:var(--danger);'>${stunde.fach}</div><div class='ausfall-text'>(Ausfall)</div>`;
                     aktuellerLehrer = "-";
                 } else if (sDaten.vFach && sDaten.vFach !== stunde.fach) {
-                    HTMLFachAnzeige = `<div class="fach-haupttext">${sDaten.vFach}</div><div class="vertretung-subtext">statt ${stunde.fach}</div>`;
+                    HTMLFachAnzeige = `<div class='fach-haupttext'>${sDaten.vFach}</div><div class='vertretung-subtext'>statt ${stunde.fach}</div>`;
                 } else {
-                    HTMLFachAnzeige = `<div class="fach-haupttext">${stunde.fach}</div>`;
+                    HTMLFachAnzeige = `<div class='fach-haupttext'>${stunde.fach}</div>`;
                 }
 
-                const buttonHTML = `<button class="btn btn-primary" style="padding:4px 8px; font-size:12px;" onclick="oeffneStunde(${stunde.std})">Öffnen</button>`;
-
-                const row = document.createElement("tr");
+                let row = document.createElement("tr");
                 if(sDaten.isSigniert) row.style.opacity = "0.7";
-
+                
                 row.innerHTML = `
-                    <td><strong>${stunde.std}</strong> <small style="color:#64748b; display:block;">${stunde.zeit}</small></td>
+                    <td><strong>${stunde.std}</strong> <small style='color:#64748b; display:block;'>${stunde.zeit}</small></td>
                     <td>${HTMLFachAnzeige}</td>
-                    <td>${sDaten.thema || "<em style='color:#64748b;'>Kein Eintrag</em>"}</td>
+                    <td>${sDaten.thema || "<em>Kein Eintrag</em>"}</td>
+                    <td>${sDaten.hausaufgaben || "<em>Kein Eintrag</em>"}</td>
                     <td><strong>${aktuellerLehrer}</strong> ${sDaten.isSigniert ? "🔒" : ""}</td>
-                    <td>${buttonHTML}</td>
+                    <td><button class='btn btn-primary' style='padding:4px 8px; font-size:12px;' onclick="LetzteGeoeffneteAnsicht='klassenbuch'; oeffneStunde(${stunde.std})">Öffnen</button></td>
                 `;
                 tbody.appendChild(row);
-                
-                rowsProcessed++;
-                if(rowsProcessed === AktuellerTagesPlan.length) {
-                    document.getElementById("countUnsigniert").innerText = unsigniertCounter;
-                }
             });
         });
     });
 }
 
+// ==========================================================================
+// DETAILS & SPEICHER-FUNKTIONEN
+// ==========================================================================
 function oeffneStunde(stdNummer) {
     gewaehlteStundeNummer = stdNummer;
     const klasse = document.getElementById("klassenAuswahl").value;
     const datum = document.getElementById("aktuellesDatum").value;
-    const stundenInfo = AktuellerTagesPlan.find(s => s.std === stdNummer);
+    const stundenInfo = AktuellerTagesPlan.find(s => s.std === stdNummer) || { std: stdNummer, lehrer: "Unbekannt", fach: "Fach" };
     const key = `${klasse}_${datum}_Std${stdNummer}`;
     
     db.collection("klassenbuch").doc(key).get().then(doc => {
@@ -327,7 +376,7 @@ function oeffneStunde(stdNummer) {
         document.getElementById("hausaufgabenInhalt").disabled = schreibgesperrt;
 
         let anzeigeFach = detail.vFach || stundenInfo.fach;
-        document.getElementById("detailStundeTitel").innerText = `${stundenInfo.std}. Stunde - ${anzeigeFach} (${stundenLehrer})`;
+        document.getElementById("detailStundeTitel").innerText = `${stundenInfo.std}. Stunde - ${anzeigeFach} (Klasse ${klasse} / ${stundenLehrer})`;
 
         const hinweis = document.getElementById("statusHinweisBox");
         if (isSigniert) {
@@ -337,7 +386,7 @@ function oeffneStunde(stdNummer) {
         } else if (!binBerechtigt) {
             hinweis.style.display = "block";
             hinweis.style.backgroundColor = "var(--bg-input)";
-            hinweis.innerText = "Schreibgeschützt: Nicht dein Fachlehrer-Kürzel. Übernimm die Stunde, um Daten einzutragen.";
+            hinweis.innerText = "Schreibgeschützt: Nicht dein Fachlehrer-Kürzel.";
         } else {
             hinweis.style.display = "none";
         }
@@ -380,6 +429,14 @@ function oeffneStunde(stdNummer) {
     });
 }
 
+function zurueckAusDetails() {
+    if(LetzteGeoeffneteAnsicht === "dashboard") {
+        zeigeDashboard();
+    } else {
+        oeffneSpezifischesKlassenbuch(document.getElementById("klassenAuswahl").value);
+    }
+}
+
 function unterrichtAendernDialog() {
     const wahl = prompt("Neues Fachkürzel eingeben (oder 'AUSFALL' für Stundenausfall):");
     if (wahl === null) return;
@@ -400,7 +457,7 @@ function unterrichtAendernDialog() {
 function unterrichtUebernehmenDialog() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const datum = document.getElementById("aktuellesDatum").value;
-    const stundenInfo = AktuellerTagesPlan.find(s => s.std === gewaehlteStundeNummer);
+    const stundenInfo = AktuellerTagesPlan.find(s => s.std === gewaehlteStundeNummer) || { fach: "Fach" };
     const key = `${klasse}_${datum}_Std${gewaehlteStundeNummer}`;
 
     const beibehalten = confirm(`Möchtest du das aktuelle Fach (${stundenInfo.fach}) beibehalten?`);
@@ -456,6 +513,9 @@ function statusDirektSpeichern(schuelerName, neuerStatus) {
     });
 }
 
+// ==========================================================================
+// EDITOR & ADMIN PANEL LOGIK
+// ==========================================================================
 function zeigeStundenplanEditor() {
     hideAllViews();
     document.getElementById("stundenplanEditorView").style.display = "block";
@@ -516,7 +576,7 @@ function speichereStundenplan() {
         stunden: neueStunden
     }).then(() => {
         alert("Stundenplan gespeichert!");
-        zeigeDashboard();
+        oeffneSpezifischesKlassenbuch(klasse);
     });
 }
 
@@ -582,12 +642,11 @@ function adminLehrerAnlegen() {
     const name = document.getElementById("setupLehrerName").value.trim();
     const kuerzel = document.getElementById("setupLehrerKuerzel").value.trim().toUpperCase();
     const uid = document.getElementById("setupLehrerUID").value.trim();
-
     if (!name || !kuerzel || !uid) return;
 
     db.collection("lehrerProfile").doc(uid).set({ name: name, kuerzel: kuerzel }).then(() => {
         alert(`Profil für ${name} angelegt!`);
-        ladeAlleLehrerProfile().then(() => datenLadenAndRendern());
+        ladeAlleLehrerProfile().then(() => arbeitsbereichLadenAndRendern());
     });
 }
 
@@ -598,7 +657,7 @@ function adminKlasseErstellen() {
 
     db.collection("klassen").doc(name).set({ klassenleiter: leiter }, { merge: true }).then(() => {
         alert(`Klasse ${name} erstellt.`);
-        klassenDropdownLaden();
+        klassenStrukturenLaden();
     });
 }
 
@@ -609,12 +668,12 @@ function adminSchuelerAnlegen() {
 
     db.collection("schueler").doc(name).set({ name: name, klasse: klasse }).then(() => {
         alert(`Schüler ${name} registriert.`);
-        datenLadenAndRendern();
     });
 }
 
 function hideAllViews() {
     document.getElementById("dashboardView").style.display = "none";
+    document.getElementById("klassenbuchView").style.display = "none";
     document.getElementById("detailView").style.display = "none";
     document.getElementById("stundenplanEditorView").style.display = "none";
     document.getElementById("adminPanelView").style.display = "none";
@@ -622,6 +681,8 @@ function hideAllViews() {
 
 function zeigeDashboard() {
     hideAllViews();
+    document.getElementById("klassenAuswahl").style.display = "none"; // Versteckt oberen Selektor
+    document.getElementById("stundenplanEditBtn").style.display = "none"; 
     document.getElementById("dashboardView").style.display = "block";
-    datenLadenAndRendern();
+    arbeitsbereichLadenAndRendern();
 }
