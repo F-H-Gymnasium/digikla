@@ -23,6 +23,16 @@ let GlobalSchuljahrConfig = { start: "", end: "", text: "" };
 let GlobalUnterrichtsZeiten = [];
 let AlleLehrerCache = {}; 
 
+// Hilfsfunktion: Berechnet die Kalenderwoche nach DIN ISO 8601
+function getKalenderWoche(dateString) {
+    const d = new Date(dateString);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return weekNo;
+}
+
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUserUID = user.uid;
@@ -44,6 +54,10 @@ auth.onAuthStateChanged(user => {
                 
                 if (aktuelleRolle === "Admin") {
                     document.getElementById("adminPanelBtn").style.display = "inline-block";
+                }
+                // Setzt standardmäßig das heutige Datum beim ersten Start
+                if(!document.getElementById("aktuellesDatum").value) {
+                    document.getElementById("aktuellesDatum").value = new Date().toISOString().split('T')[0];
                 }
                 klassenDropdownLaden();
             });
@@ -113,6 +127,11 @@ function datenLadenAndRendern() {
         }
     }
 
+    // A/B-Wochen-Ermittlung: Ungerade KW = A, Gerade KW = B
+    const kw = getKalenderWoche(datumString);
+    const wochenTyp = (kw % 2 !== 0) ? "A" : "B";
+    document.getElementById("wochenTypAnzeige").innerText = `${wochenTyp}-Woche (KW ${kw})`;
+
     document.getElementById("klassenTitel").innerText = `Tagesübersicht - Klasse ${klasse}`;
 
     db.collection("klassen").doc(klasse).get().then(doc => {
@@ -141,11 +160,14 @@ function datenLadenAndRendern() {
         return;
     }
 
-    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(String(wochentag)).get().then(doc => {
+    // ÄNDERUNG: Wir fragen gezielt das Dokument mit dem Suffix der Woche ab (z.B. "1_A")
+    const planDokumentId = `${wochentag}_${wochenTyp}`;
+
+    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(planDokumentId).get().then(doc => {
         AktuellerTagesPlan = doc.exists ? (doc.data().stunden || []) : [];
         
         if(AktuellerTagesPlan.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; color:var(--border);'>Kein Stundenplan definiert.</td></tr>";
+            tbody.innerHTML = `<tr><td colspan='6' style='text-align:center; color:var(--border);'>Kein Stundenplan für die ${wochenTyp}-Woche definiert.</td></tr>`;
             return;
         }
 
@@ -154,18 +176,18 @@ function datenLadenAndRendern() {
             db.collection("klassenbuch").doc(key).get().then(bDoc => {
                 const sDaten = bDoc.exists ? bDoc.data() : {};
                 
-                // Nutze Vertretungsdaten falls vorhanden, sonst Standard aus dem Plan
-                let aktuellesFach = sDaten.vFach || stunde.fach;
+                let HTMLFachAnzeige = "";
                 let aktuellerLehrer = sDaten.vLehrer || stunde.lehrer;
                 
                 if (sDaten.istAusfall) {
-                    aktuellesFach = `<span style="color:var(--danger); text-decoration:line-through;">${stunde.fach}</span> <small>(Ausfall)</small>`;
+                    HTMLFachAnzeige = `<div class="fach-haupttext" style="color:var(--danger); text-decoration:line-through;">${stunde.fach}</div><div class="ausfall-text">(Ausfall)</div>`;
                     aktuellerLehrer = "-";
                 } else if (sDaten.vFach && sDaten.vFach !== stunde.fach) {
-                    aktuellesFach = `${sDaten.vFach} <br><small style="color:var(--warning);">statt ${stunde.fach}</small>`;
+                    HTMLFachAnzeige = `<div class="fach-haupttext">${sDaten.vFach}</div><div class="vertretung-subtext">statt ${stunde.fach}</div>`;
+                } else {
+                    HTMLFachAnzeige = `<div class="fach-haupttext">${stunde.fach}</div>`;
                 }
 
-                // JEDER darf jetzt in die Ansicht klicken!
                 const buttonHTML = `<button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Ansehen / Bearbeiten</button>`;
 
                 const row = document.createElement("tr");
@@ -173,7 +195,7 @@ function datenLadenAndRendern() {
 
                 row.innerHTML = `
                     <td><strong>${stunde.std}</strong> <br><small style="color:var(--border);">${stunde.zeit}</small></td>
-                    <td><span class="btn btn-secondary" style="cursor:default;">${aktuellesFach}</span></td>
+                    <td>${HTMLFachAnzeige}</td>
                     <td>${sDaten.thema || "<em>Kein Eintrag</em>"}</td>
                     <td>${sDaten.hausaufgaben || "-"}</td>
                     <td><strong>${aktuellerLehrer}</strong> ${sDaten.isSigniert ? "🔒" : ""}</td>
@@ -197,28 +219,21 @@ function oeffneStunde(stdNummer) {
         const detail = doc.exists ? doc.data() : { thema: "", hausaufgaben: "", anwesenheit: {} };
         if (!detail.anwesenheit) detail.anwesenheit = {};
 
-        // Ermittle wer laut Plan / Vertretung gerade drin steht
         let stundenLehrer = detail.vLehrer || stundenInfo.lehrer;
         let istAusfall = detail.istAusfall || false;
         let isSigniert = detail.isSigniert || false;
 
-        // Rechte-Prüfung: Gehört mir die Stunde, oder bin ich Admin/Sekretariat?
         let binBerechtigt = (aktuelleRolle === "Admin" || aktuelleRolle === "Sekretariat" || (stundenLehrer === MeinLehrerProfil.kuerzel && !istAusfall));
-        
-        // Wenn signiert ist, kann NIEMAND mehr schreiben, außer man bricht das Signum auf
         let schreibgesperrt = isSigniert || !binBerechtigt;
 
-        // Felder aktivieren/deaktivieren
         document.getElementById("unterrichtsInhalt").value = detail.thema || "";
         document.getElementById("unterrichtsInhalt").disabled = schreibgesperrt;
         document.getElementById("hausaufgabenInhalt").value = detail.hausaufgaben || "";
         document.getElementById("hausaufgabenInhalt").disabled = schreibgesperrt;
 
-        // UI Header Text
         let anzeigeFach = detail.vFach || stundenInfo.fach;
         document.getElementById("detailStundeTitel").innerText = `${stundenInfo.std}. Stunde - ${anzeigeFach} (${stundenLehrer})`;
 
-        // Hinweisbox steuern
         const hinweis = document.getElementById("statusHinweisBox");
         if (isSigniert) {
             hinweis.style.display = "block";
@@ -232,12 +247,10 @@ function oeffneStunde(stdNummer) {
             hinweis.style.display = "none";
         }
 
-        // Steuerung der 3 Buttons oben rechts
         if (isSigniert) {
             document.getElementById("btnUnterrichtAendern").style.display = "none";
             document.getElementById("btnUnterrichtUebernehmen").style.display = "none";
             document.getElementById("btnUnterrichtSignieren").style.display = "none";
-            // Nur Admins, Sekretariat oder der signierende Lehrer dürfen das Signum brechen
             document.getElementById("btnSignumZuruecknehmen").style.display = binBerechtigt ? "inline-block" : "none";
         } else {
             document.getElementById("btnUnterrichtAendern").style.display = "inline-block";
@@ -246,7 +259,6 @@ function oeffneStunde(stdNummer) {
             document.getElementById("btnSignumZuruecknehmen").style.display = "none";
         }
 
-        // Schülerliste rendern
         const listeUl = document.getElementById("schuelerDetailListe");
         listeUl.innerHTML = "";
         
@@ -280,9 +292,8 @@ function oeffneStunde(stdNummer) {
     });
 }
 
-// BUTTON: UNTERRICHT ÄNDERN (Vertretung / Ausfall)
 function unterrichtAendernDialog() {
-    const wahl = prompt("Gib ein Fachkürzel ein (z.B. MA), um eine Vertretung zu setzen. Gib 'AUSFALL' ein, um die Stunde ausfallen zu lassen.");
+    const wahl = prompt("Gib ein Fachkürzel ein (z.B. MA) für Vertretung. Gib 'AUSFALL' ein, um die Stunde ausfallen zu lassen.");
     if (wahl === null) return;
 
     const klasse = document.getElementById("klassenAuswahl").value;
@@ -307,7 +318,6 @@ function unterrichtAendernDialog() {
     }
 }
 
-// BUTTON: UNTERRICHT ÜBERNEHMEN
 function unterrichtUebernehmenDialog() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const datum = document.getElementById("aktuellesDatum").value;
@@ -333,7 +343,6 @@ function unterrichtUebernehmenDialog() {
     });
 }
 
-// BUTTON: SIGNIEREN
 function stundeSignieren() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const datum = document.getElementById("aktuellesDatum").value;
@@ -349,7 +358,6 @@ function stundeSignieren() {
     });
 }
 
-// BUTTON: SIGNUM ZURÜCKNEHMEN
 function signumZuruecknehmen() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const datum = document.getElementById("aktuellesDatum").value;
@@ -378,33 +386,25 @@ function statusDirektSpeichern(schuelerName, neuerStatus) {
     });
 }
 
-function stundeSpeichernUndSchliessen() {
-    const klasse = document.getElementById("klassenAuswahl").value;
-    const datum = document.getElementById("aktuellesDatum").value;
-    const key = `${klasse}_${datum}_Std${gewaehlteStundeNummer}`;
-    
-    db.collection("klassenbuch").doc(key).set({
-        thema: document.getElementById("unterrichtsInhalt").value,
-        hausaufgaben: document.getElementById("hausaufgabenInhalt").value
-    }, { merge: true }).then(() => zeigeDashboard());
-}
-
 function zeigeStundenplanEditor() {
     hideAllViews();
     document.getElementById("stundenplanEditorView").style.display = "block";
     document.getElementById("editWochentag").value = "1";
+    document.getElementById("editWochenTyp").value = "A";
     ladeEditorPlanForDay();
 }
 
 function ladeEditorPlanForDay() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const tag = document.getElementById("editWochentag").value;
+    const typ = document.getElementById("editWochenTyp").value;
     const tbody = document.getElementById("editorStundenBody");
     tbody.innerHTML = "";
 
     const anzahlStunden = Math.max(GlobalUnterrichtsZeiten.length, 6);
+    const planId = `${tag}_${typ}`;
 
-    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(tag).get().then(doc => {
+    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(planId).get().then(doc => {
         const existierenderPlan = doc.exists ? (doc.data().stunden || []) : [];
         
         for (let i = 1; i <= anzahlStunden; i++) {
@@ -415,8 +415,8 @@ function ladeEditorPlanForDay() {
             row.innerHTML = `
                 <td><strong>${i}</strong></td>
                 <td><span id="editZeitAnzeige${i}" style="font-weight:600; color:#94a3b8;">${vordefinierteZeit || "Nicht definiert"}</span></td>
-                <td><input type="text" id="editFach${i}" value="${alteStd.fach}" placeholder="z.B. MA"></td>
-                <td><input type="text" id="editLehrer${i}" value="${alteStd.lehrer}" placeholder="z.B. FINN"></td>
+                <td><input type="text" id="editFach${i}" value="${alteStd.fach}" placeholder="z.B. TC"></td>
+                <td><input type="text" id="editLehrer${i}" value="${alteStd.lehrer}" placeholder="z.B. MÜLL"></td>
             `;
             tbody.appendChild(row);
         }
@@ -426,6 +426,8 @@ function ladeEditorPlanForDay() {
 function speichereStundenplan() {
     const klasse = document.getElementById("klassenAuswahl").value;
     const tag = document.getElementById("editWochentag").value;
+    const typ = document.getElementById("editWochenTyp").value;
+    const planId = `${tag}_${typ}`;
     
     let neueStunden = [];
     const anzahlStunden = Math.max(GlobalUnterrichtsZeiten.length, 6);
@@ -440,10 +442,10 @@ function speichereStundenplan() {
         }
     }
 
-    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(tag).set({
+    db.collection("klassen").doc(klasse).collection("stundenplaene").doc(planId).set({
         stunden: neueStunden
     }).then(() => {
-        alert("Stundenplan gespeichert!");
+        alert(`Stundenplan für ${typ}-Woche gespeichert!`);
         zeigeDashboard();
     });
 }
@@ -498,7 +500,7 @@ function speichereGrundeinstellungen() {
         zeitenArray.push(val);
     }
 
-    db.collection("einstellungen").doc("allgewohnt").set({
+    db.collection("einstellungen").doc("allgemein").set({
         schuljahr: sj, startDatum: start, endDatum: end, zeiten: zeitenArray
     }).then(() => {
         alert("Grundeinstellungen gesichert!");
