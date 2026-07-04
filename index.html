@@ -71,24 +71,11 @@
                         </div>
                     </div>
 
-                    <div class="dashboard-col card">
-                        <h3>Mein heutiger Unterricht</h3>
-                        <table class="stunden-tabelle mini-tabelle">
-                            <thead>
-                                <tr>
-                                    <th>Std.</th>
-                                    <th>Klasse</th>
-                                    <th>Fach</th>
-                                    <th>Raum/Info</th>
-                                    <th>Aktion</th>
-                                </tr>
-                            </thead>
-                            <tbody id="lehrerStundenBody">
-                                </tbody>
-                        </table>
-
-                        <h3 style="margin-top: 25px;">Offene Aufgaben</h3>
-                        <div class="todo-box">
+                    <div class="dashboard-col card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 300px; text-align: center; color: #64748b;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🗓️</div>
+                        <h3>Willkommen im Arbeitsbereich</h3>
+                        <p style="max-width: 300px; font-size: 14px; margin: 0 auto 20px auto;">Wähle rechts ein Klassenbuch oder eine andere Klasse aus, um die Tagesübersicht und Stundenpläne zu bearbeiten.</p>
+                        <div class="todo-box" style="width: 100%; max-width: 280px; text-align: left;">
                             <div class="todo-item alert-warning">
                                 <span>Nicht signierte Stunden</span>
                                 <span class="badge-count" id="countUnsigniert">0</span>
@@ -101,13 +88,12 @@
                         <div class="card">
                             <h3>Klassenbuch</h3>
                             <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Deine Standard-Klassen im Fachunterricht:</p>
-                            <div class="quick-links-grid" id="meineKlassenLinks">
-                                </div>
+                            <div class="quick-links-grid" id="meineKlassenLinks"></div>
                         </div>
 
                         <div class="card" style="margin-top: 20px;">
                             <h3>Stundenplan anderer Klassen</h3>
-                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Klassenbuch einer fremden Klasse aufrufen (z.B. Vertretung):</p>
+                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Klassenbuch einer fremden Klasse aufrufen:</p>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <select id="klassenAuswahlDashboard" style="width: 100%;">
                                     <option value="">-- Klasse wählen --</option>
