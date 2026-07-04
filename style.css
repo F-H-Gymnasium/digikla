@@ -47,13 +47,20 @@ body {
     align-items: center;
 }
 
-.user-info select, .user-info input, input[type="email"], input[type="password"], input[type="text"] {
+.user-info select, .user-info input, input[type="email"], input[type="password"], input[type="text"], label + input {
     padding: 8px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     color: white;
     border-radius: 4px;
     box-sizing: border-box;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #94a3b8;
 }
 
 .user-badge {
@@ -165,18 +172,10 @@ textarea {
     border-bottom: 1px solid var(--border);
 }
 
-.status-badge {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
-}
-
 select.status-select {
     padding: 6px;
     background: var(--bg-input);
     color: white;
     border: 1px solid var(--border);
     border-radius: 4px;
-    cursor: pointer;
 }
