@@ -3,78 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DigiKla - Portal</title>
+    <title>Digitales Klassenbuch - Portal</title>
     <link rel="stylesheet" href="style.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
-    <header class="main-header">
-        <div class="logo">DigiKla</div>
-        <div class="user-info">
-            <label>Rolle: </label>
-            <select id="aktuelleRolle" onchange="datenLadenAndRendern()">
-                <option value="Lehrer">Lehrer (FINN)</option>
-                <option value="Klassenleiter">Klassenleiter</option>
-                <option value="Sekretariat">Sekretariat</option>
-            </select>
-            <input type="date" id="aktuellesDatum" onchange="datenLadenAndRendern()">
+    <div id="loginView" class="container" style="max-width: 400px; margin: 100px auto;">
+        <h2 style="color: #0284c7; text-align: center;">Klassenbuch Login</h2>
+        <div style="display: flex; flex-direction: column; gap: 15px;">
+            <input type="email" id="loginEmail" placeholder="E-Mail (z.B. lehrer@schule.de)">
+            <input type="password" id="loginPassword" placeholder="Passwort">
+            <button class="btn btn-primary" onclick="login()">Einloggen</button>
+            <p id="loginError" style="color: #ef4444; font-size: 14px; text-align: center; margin: 0;"></p>
         </div>
-    </header>
+    </div>
 
-    <main class="content-container">
-        
-        <section id="dashboardView">
-            <div class="section-header">
-                <h2>Tagesübersicht - Klasse 8rt</h2>
-                <div class="info-badges">
-                    <span><strong>Tafeldienst:</strong> Klara Schuhmacher</span>
-                </div>
+    <div id="appView" style="display: none;">
+        <header class="main-header">
+            <div class="logo">Klassenbuch Pro</div>
+            <div class="user-info">
+                <span id="angemeldeterUser">Lade Profil...</span>
+                <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
+                <input type="date" id="aktuellesDatum" onchange="datenLadenAndRendern()">
+                <button class="btn btn-secondary" onclick="logout()" style="padding: 4px 10px; margin-left: 15px;">Logout</button>
             </div>
+        </header>
+
+        <main class="content-container">
             
-            <table class="stunden-tabelle">
-                <thead>
-                    <tr>
-                        <th>Stunde</th>
-                        <th>Unterricht</th>
-                        <th>Unterrichtsthema</th>
-                        <th>Hausaufgaben</th>
-                        <th>Lehrer</th>
-                        <th>Aktion</th>
-                    </tr>
-                </thead>
-                <tbody id="tagesStundenBody">
-                    </tbody>
-            </table>
-        </section>
-
-        <section id="detailView" style="display: none;">
-            <div class="detail-top-bar">
-                <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück zur Übersicht</button>
-                <h2 id="detailStundeTitel">Montag, 1. Stunde - Informatik</h2>
-                <button class="btn btn-primary" onclick="stundeSpeichernUndSchliessen()">Unterricht signieren</button>
-            </div>
-
-            <div class="detail-grid">
-                <div class="detail-left">
-                    <div class="card">
-                        <h3>Unterrichtsthema</h3>
-                        <textarea id="unterrichtsInhalt" placeholder="Unterrichtsinhalt hier eintragen..."></textarea>
-                    </div>
-                    <div class="card">
-                        <h3>Hausaufgaben erstellen</h3>
-                        <textarea id="hausaufgabenInhalt" placeholder="Hausaufgaben für die nächste Stunde..."></textarea>
+            <section id="dashboardView">
+                <div class="section-header">
+                    <h2>Tagesübersicht - Klasse 8rt</h2>
+                    <div class="info-badges">
+                        <span><strong>Tafeldienst:</strong> Klara Schuhmacher</span>
                     </div>
                 </div>
+                
+                <table class="stunden-tabelle">
+                    <thead>
+                        <tr>
+                            <th>Stunde</th>
+                            <th>Unterricht</th>
+                            <th>Unterrichtsthema</th>
+                            <th>Hausaufgaben</th>
+                            <th>Lehrer</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tagesStundenBody">
+                        </tbody>
+                </table>
+            </section>
 
-                <div class="detail-right card">
-                    <h3>Schülerübersicht</h3>
-                    <ul class="schueler-anwesenheits-liste" id="schuelerDetailListe">
-                        </ul>
+            <section id="detailView" style="display: none;">
+                <div class="detail-top-bar">
+                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück zur Übersicht</button>
+                    <h2 id="detailStundeTitel">Stunden-Details</h2>
+                    <button class="btn btn-primary" onclick="stundeSpeichernUndSchliessen()">Unterricht signieren</button>
                 </div>
-            </div>
-        </section>
 
-    </main>
+                <div class="detail-grid">
+                    <div class="detail-left">
+                        <div class="card">
+                            <h3>Unterrichtsthema</h3>
+                            <textarea id="unterrichtsInhalt" placeholder="Unterrichtsinhalt hier eintragen..."></textarea>
+                        </div>
+                        <div class="card">
+                            <h3>Hausaufgaben erstellen</h3>
+                            <textarea id="hausaufgabenInhalt" placeholder="Hausaufgaben für die nächste Stunde..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="detail-right card">
+                        <h3>Schülerübersicht</h3>
+                        <ul class="schueler-anwesenheits-liste" id="schuelerDetailListe">
+                            </ul>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
 
     <script src="script.js"></script>
 </body>
