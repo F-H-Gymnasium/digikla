@@ -1,11 +1,12 @@
 // 1. Firebase Konfiguration - ERSETZE DIESE WERTE MIT DEINEN EIGENEN AUS FIREBASE
 const firebaseConfig = {
-    apiKey: "DEIN_API_KEY",
-    authDomain: "DEIN_PROJEKT.firebaseapp.com",
-    projectId: "DEIN_PROJEKT",
-    storageBucket: "DEIN_PROJEKT.appspot.com",
-    messagingSenderId: "DEINE_MESSAGING_ID",
-    appId: "DEINE_APP_ID"
+  apiKey: "AIzaSyDca_7n2rtIBVVUEMep4l_D610mZKaK0uw",
+  authDomain: "digikla.firebaseapp.com",
+  projectId: "digikla",
+  storageBucket: "digikla.firebasestorage.app",
+  messagingSenderId: "640958457111",
+  appId: "1:640958457111:web:d0be4e9e598d0675148352",
+  measurementId: "G-CNPR7H4YKP"
 };
 
 // Firebase initialisieren
