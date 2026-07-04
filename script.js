@@ -137,3 +137,4 @@ function zeigeDashboard() {
     document.getElementById("dashboardView").style.display = "block";
     datenLadenAndRendern();
 }
+
