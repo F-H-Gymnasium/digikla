@@ -47,12 +47,13 @@ body {
     align-items: center;
 }
 
-.user-info select, .user-info input, input[type="email"], input[type="password"] {
+.user-info select, .user-info input, input[type="email"], input[type="password"], input[type="text"] {
     padding: 8px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     color: white;
     border-radius: 4px;
+    box-sizing: border-box;
 }
 
 .user-badge {
@@ -93,6 +94,15 @@ body {
     color: var(--primary);
 }
 
+.stunden-tabelle input {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: white;
+    padding: 6px;
+    border-radius: 4px;
+    width: 90%;
+}
+
 .btn {
     padding: 8px 16px;
     border: none;
@@ -107,7 +117,6 @@ body {
 .btn-secondary { background: var(--bg-input); color: white; }
 .btn-secondary:hover { background: #475569; }
 
-/* Detailansicht Layout */
 .detail-top-bar {
     display: flex;
     justify-content: space-between;
@@ -142,7 +151,6 @@ textarea {
     font-family: inherit;
 }
 
-/* Schülerliste & Badges */
 .schueler-anwesenheits-liste {
     list-style: none;
     padding: 0;
