@@ -18,23 +18,31 @@ let gewaehlteStundeNummer = null;
 let AktuellerTagesPlan = [];
 let GeladeneSchueler = [];
 
-// Globale Speicher für geladene Grundeinstellungen
+// Globale Profildaten des aktuell angemeldeten Lehrers
+let MeinLehrerProfil = { name: "Unbekannter Lehrer", kuerzel: "KST" };
+
+// Globale Caches für Grundeinstellungen und Lehrerzuordnungen
 let GlobalSchuljahrConfig = { start: "", end: "", text: "" };
-let GlobalUnterrichtsZeiten = []; // Array von Strings ["07:20 - 08:05", ...]
+let GlobalUnterrichtsZeiten = [];
+let AlleLehrerCache = {}; // Format: { "UID": { name: "...", kuerzel: "..." } }
 
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUserUID = user.uid;
         document.getElementById("loginView").style.display = "none";
         document.getElementById("appView").style.display = "block";
-        document.getElementById("angemeldeterUser").innerText = user.email;
         
-        if (!document.getElementById("aktuellesDatum").value) {
-            document.getElementById("aktuellesDatum").valueAsDate = new Date();
-        }
-        
-        // 1. Grundeinstellungen aus Cloud laden
-        ladeGrundeinstellungenVonCloud().then(() => {
+        // 1. Grundeinstellungen & alle Lehrer laden
+        Promise.all([
+            ladeGrundeinstellungenVonCloud(),
+            ladeAlleLehrerProfile()
+        ]).then(() => {
+            // Eigenes Profil bestimmen
+            if (AlleLehrerCache[user.uid]) {
+                MeinLehrerProfil = AlleLehrerCache[user.uid];
+            }
+            document.getElementById("angemeldeterUser").innerText = `${MeinLehrerProfil.name} (${MeinLehrerProfil.kuerzel})`;
+            
             // 2. Rolle laden
             db.collection("users").doc(user.uid).get().then(doc => {
                 aktuelleRolle = doc.exists ? (doc.data().rolle || "Lehrer") : "Lehrer";
@@ -64,21 +72,23 @@ function login() {
 
 function logout() { auth.signOut(); }
 
-// Holt Schuljahr und Zeiten aus Firestore
 function ladeGrundeinstellungenVonCloud() {
     return db.collection("einstellungen").doc("allgemein").get().then(doc => {
         if (doc.exists) {
             const data = doc.data();
-            GlobalSchuljahrConfig = {
-                text: data.schuljahr || "",
-                start: data.startDatum || "",
-                end: data.endDatum || ""
-            };
+            GlobalSchuljahrConfig = { text: data.schuljahr || "", start: data.startDatum || "", end: data.endDatum || "" };
             GlobalUnterrichtsZeiten = data.zeiten || [];
-            
-            // Header Anzeige befüllen
             document.getElementById("schuljahrAnzeige").innerText = GlobalSchuljahrConfig.text ? `Sj. ${GlobalSchuljahrConfig.text}` : "";
         }
+    });
+}
+
+function ladeAlleLehrerProfile() {
+    return db.collection("lehrerProfile").get().then(snapshot => {
+        AlleLehrerCache = {};
+        snapshot.forEach(doc => {
+            AlleLehrerCache[doc.id] = doc.data(); // doc.id ist die Lehrer-UID
+        });
     });
 }
 
@@ -109,21 +119,30 @@ function datenLadenAndRendern() {
 
     if (!klasse || !datumString) return;
 
-    // Datumsprüfung (Liegt es im Schuljahr?)
     if (GlobalSchuljahrConfig.start && GlobalSchuljahrConfig.end) {
         if (datumString < GlobalSchuljahrConfig.start || datumString > GlobalSchuljahrConfig.end) {
-            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; color:var(--danger); font-weight:bold;'>Datum liegt außerhalb des konfigurierten Schuljahres!</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; color:var(--danger); font-weight:bold;'>Datum liegt außerhalb des Schuljahres!</td></tr>";
             return;
         }
     }
 
     document.getElementById("klassenTitel").innerText = `Tagesübersicht - Klasse ${klasse}`;
 
+    // Klassenleiter-Anzeige übersetzen
     db.collection("klassen").doc(klasse).get().then(doc => {
         if(doc.exists) {
             const klUID = doc.data().klassenleiter || "";
-            document.getElementById("klassenleiterInfo").innerHTML = `<strong>Klassenleiter-UID:</strong> ${klUID}`;
+            let klName = "Keiner";
             
+            if (AlleLehrerCache[klUID]) {
+                klName = AlleLehrerCache[klUID].name;
+            } else if (klUID) {
+                klName = klUID; // Fallback falls kein Profil existiert
+            }
+            
+            document.getElementById("klassenleiterInfo").innerHTML = `<strong>Klassenleiter:</strong> ${klName}`;
+            
+            // Edit-Rechte für den Stundenplan festlegen
             if (aktuelleRolle === "Admin" || currentUserUID === klUID) {
                 document.getElementById("stundenplanEditBtn").style.display = "inline-block";
             } else {
@@ -147,7 +166,7 @@ function datenLadenAndRendern() {
         AktuellerTagesPlan = doc.exists ? (doc.data().stunden || []) : [];
         
         if(AktuellerTagesPlan.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; color:var(--border);'>Kein Stundenplan für diesen Tag definiert.</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; color:var(--border);'>Kein Stundenplan definiert.</td></tr>";
             return;
         }
 
@@ -155,14 +174,27 @@ function datenLadenAndRendern() {
             const key = `${klasse}_${datumString}_Std${stunde.std}`;
             db.collection("klassenbuch").doc(key).get().then(bDoc => {
                 const sDaten = bDoc.exists ? bDoc.data() : { thema: "", hausaufgaben: "" };
+                
+                // RECHTE-PRÜFUNG FÜR DIE AKTION (Kürzel-Sperre)
+                let darfBearbeiten = false;
+                if (aktuelleRolle === "Admin" || aktuelleRolle === "Sekretariat") {
+                    darfBearbeiten = true;
+                } else if (stunde.lehrer === MeinLehrerProfil.kuerzel) {
+                    darfBearbeiten = true;
+                }
+
+                const buttonHTML = darfBearbeiten 
+                    ? `<button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Bearbeiten</button>`
+                    : `<button class="btn" disabled title="Nur für Lehrer mit Kürzel ${stunde.lehrer}">Gesperrt</button>`;
+
                 const row = document.createElement("tr");
                 row.innerHTML = `
                     <td><strong>${stunde.std}</strong> <br><small style="color:var(--border);">${stunde.zeit}</small></td>
                     <td><span class="btn btn-secondary" style="cursor:default;">${stunde.fach}</span></td>
                     <td>${sDaten.thema || "<em>Kein Eintrag</em>"}</td>
                     <td>${sDaten.hausaufgaben || "-"}</td>
-                    <td>${stunde.lehrer}</td>
-                    <td><button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Bearbeiten</button></td>
+                    <td><strong>${stunde.lehrer}</strong></td>
+                    <td>${buttonHTML}</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -245,7 +277,6 @@ function stundeSpeichernUndSchliessen() {
     }, { merge: true }).then(() => zeigeDashboard());
 }
 
-// STUNDENPLAN-EDITOR (Zieht sich jetzt die vordefinierten Zeiten)
 function zeigeStundenplanEditor() {
     hideAllViews();
     document.getElementById("stundenplanEditorView").style.display = "block";
@@ -259,7 +290,6 @@ function ladeEditorPlanForDay() {
     const tbody = document.getElementById("editorStundenBody");
     tbody.innerHTML = "";
 
-    // Falls der Admin weniger als 8 Stunden definiert hat, füllen wir auf
     const anzahlStunden = Math.max(GlobalUnterrichtsZeiten.length, 6);
 
     db.collection("klassen").doc(klasse).collection("stundenplaene").doc(tag).get().then(doc => {
@@ -290,7 +320,7 @@ function speichereStundenplan() {
 
     for(let i = 1; i <= anzahlStunden; i++) {
         let fachVal = document.getElementById(`editFach${i}`).value.trim();
-        let lehrerVal = document.getElementById(`editLehrer${i}`).value.trim();
+        let lehrerVal = document.getElementById(`editLehrer${i}`).value.trim().toUpperCase(); // Automatisch Großbuchstaben
         let zeitVal = document.getElementById(`editZeitAnzeige${i}`).innerText;
         
         if(fachVal && zeitVal !== "Nicht definiert") {
@@ -301,12 +331,12 @@ function speichereStundenplan() {
     db.collection("klassen").doc(klasse).collection("stundenplaene").doc(tag).set({
         stunden: neueStunden
     }).then(() => {
-        alert("Stundenplan erfolgreich gespeichert!");
+        alert("Stundenplan gespeichert!");
         zeigeDashboard();
     });
 }
 
-// ADMIN PANEL TABS & GRUNDEINSTELLUNGEN
+// ADMIN PANEL TABS & SETUPS
 function zeigeAdminPanel() {
     hideAllViews();
     document.getElementById("adminPanelView").style.display = "block";
@@ -326,7 +356,6 @@ function wechsleAdminTab(tabName) {
         document.getElementById("btnTabKlassen").className = "btn btn-secondary";
         document.getElementById("btnTabEinstellungen").className = "btn btn-primary";
         
-        // Werte in Inputs laden
         document.getElementById("setupSchuljahr").value = GlobalSchuljahrConfig.text;
         document.getElementById("setupStartDatum").value = GlobalSchuljahrConfig.start;
         document.getElementById("setupEndDatum").value = GlobalSchuljahrConfig.end;
@@ -355,17 +384,39 @@ function speichereGrundeinstellungen() {
     let zeitenArray = [];
     for(let i = 1; i <= 8; i++) {
         let val = document.getElementById(`setupZeitSpanne${i}`).value.trim();
-        zeitenArray.push(val); // Wir pushen auch leere, filtern sie beim Laden oder lassen sie unbesetzt
+        zeitenArray.push(val);
     }
 
     db.collection("einstellungen").doc("allgemein").set({
-        schuljahr: sj,
-        startDatum: start,
-        endDatum: end,
-        zeiten: zeitenArray
+        schuljahr: sj, startDatum: start, endDatum: end, zeiten: zeitenArray
     }).then(() => {
-        alert("Grundeinstellungen erfolgreich in der Cloud gespeichert!");
+        alert("Grundeinstellungen gesichert!");
         ladeGrundeinstellungenVonCloud().then(() => zeigeDashboard());
+    });
+}
+
+// NEU: LEHRER PROFIL ERSTELLEN LOGIK
+function adminLehrerAnlegen() {
+    const name = document.getElementById("setupLehrerName").value.trim();
+    const kuerzel = document.getElementById("setupLehrerKuerzel").value.trim().toUpperCase();
+    const uid = document.getElementById("setupLehrerUID").value.trim();
+
+    if (!name || !kuerzel || !uid) {
+        alert("Bitte alle Lehrer-Felder ausfüllen!");
+        return;
+    }
+
+    db.collection("lehrerProfile").doc(uid).set({
+        name: name,
+        kuerzel: kuerzel
+    }).then(() => {
+        alert(`Profil für ${name} (${kuerzel}) erfolgreich angelegt!`);
+        document.getElementById("setupLehrerName").value = "";
+        document.getElementById("setupLehrerKuerzel").value = "";
+        document.getElementById("setupLehrerUID").value = "";
+        
+        // Caches neu laden, damit Änderungen sofort aktiv sind
+        ladeAlleLehrerProfile().then(() => datenLadenAndRendern());
     });
 }
 
@@ -386,7 +437,7 @@ function adminSchuelerAnlegen() {
     if(!name || !klasse) return;
 
     db.collection("schueler").doc(name).set({ name: name, klasse: klasse }).then(() => {
-        alert(`Schüler ${name} wurde der Klasse ${klasse} hinzugefügt.`);
+        alert(`Schüler ${name} wurde hinzugefügt.`);
         datenLadenAndRendern();
     });
 }
