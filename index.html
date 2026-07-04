@@ -24,14 +24,14 @@
 
     <div id="appView" style="display: none;">
         <header class="main-header">
-            <div class="logo">DigiKla</div>
+            <div class="logo" onclick="zeigeDashboard()" style="cursor: pointer;">DigiKla</div>
             <div class="user-info">
                 <span id="angemeldeterUser">Lade Profil...</span>
                 <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
                 <span id="schuljahrAnzeige" style="margin-right: 15px; color: var(--warning); font-weight: bold;"></span>
                 
-                <select id="klassenAuswahl" onchange="datenLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
-                <input type="date" id="aktuellesDatum" onchange="datenLadenAndRendern()">
+                <select id="klassenAuswahl" onchange="stundenplanKlasseLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
+                <input type="date" id="aktuellesDatum" onchange="datumGeaendert()">
                 
                 <button id="adminPanelBtn" class="btn btn-secondary" onclick="zeigeAdminPanel()" style="display:none; margin-left:10px;">⚙ Admin</button>
                 <button id="stundenplanEditBtn" class="btn btn-secondary" onclick="zeigeStundenplanEditor()" style="display:none; margin-left:10px;">📅 Plan bearbeiten</button>
@@ -43,10 +43,78 @@
             
             <section id="dashboardView">
                 <div class="section-header">
-                    <h2 id="klassenTitel">Tagesübersicht</h2>
+                    <h2>Mein Arbeitsbereich</h2>
                     <div class="info-badges">
-                        <span id="wochenTypAnzeige" class="status-badge" style="background: var(--primary); margin-right: 15px;">A-Woche</span>
-                        <span id="klassenleiterInfo"><strong>Klassenleiter:</strong> Lade...</span>
+                        <span id="wochenTypAnzeige" class="status-badge" style="background: var(--primary);">A-Woche</span>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    
+                    <div class="dashboard-col card">
+                        <div class="col-header">
+                            <h3>Abwesenheiten Heute</h3>
+                        </div>
+                        <div class="absences-container">
+                            <div class="absence-group">
+                                <h4 style="color: var(--success); margin-bottom: 5px;">✔ Entschuldigt</h4>
+                                <ul id="listeEntschuldigt" class="dashboard-list"></ul>
+                            </div>
+                            <div class="absence-group" style="margin-top: 15px;">
+                                <h4 style="color: var(--warning); margin-bottom: 5px;">⏳ Abgemeldet / Ausflug</h4>
+                                <ul id="listeAbgemeldet" class="dashboard-list"></ul>
+                            </div>
+                            <div class="absence-group" style="margin-top: 15px;">
+                                <h4 style="color: var(--danger); margin-bottom: 5px;">❌ Unentschuldigt</h4>
+                                <ul id="listeUnentschuldigt" class="dashboard-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-col card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 300px; text-align: center; color: #64748b;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🗓️</div>
+                        <h3>Willkommen im Arbeitsbereich</h3>
+                        <p style="max-width: 300px; font-size: 14px; margin: 0 auto 20px auto;">Wähle rechts ein Klassenbuch oder eine andere Klasse aus, um die Tagesübersicht und Stundenpläne zu bearbeiten.</p>
+                        <div class="todo-box" style="width: 100%; max-width: 280px; text-align: left;">
+                            <div class="todo-item alert-warning">
+                                <span>Nicht signierte Stunden</span>
+                                <span class="badge-count" id="countUnsigniert">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-col">
+                        
+                        <div class="card">
+                            <h3>Klassenbuch</h3>
+                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Deine Standard-Klassen im Fachunterricht:</p>
+                            <div class="quick-links-grid" id="meineKlassenLinks"></div>
+                        </div>
+
+                        <div class="card" style="margin-top: 20px;">
+                            <h3>Stundenplan anderer Klassen</h3>
+                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Klassenbuch einer fremden Klasse aufrufen:</p>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select id="klassenAuswahlDashboard" style="width: 100%;">
+                                    <option value="">-- Klasse wählen --</option>
+                                </select>
+                                <button class="btn btn-primary" onclick="oeffneFremdeKlasse()">Öffnen</button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </section>
+
+            <section id="klassenbuchView" style="display: none;">
+                <div class="section-header">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zum Arbeitsbereich</button>
+                        <h2 id="klassenTitel">Klassenbuch Übersicht</h2>
+                    </div>
+                    <div class="info-badges">
+                        <span id="klassenleiterInfo" class="status-badge" style="background: var(--bg-input);">Klassenleiter: Lade...</span>
                     </div>
                 </div>
                 
@@ -68,7 +136,7 @@
             <section id="detailView" style="display: none;">
                 <div class="detail-top-bar">
                     <div>
-                        <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                        <button class="btn btn-secondary" onclick="zurueckAusDetails()">🡠 Zurück</button>
                     </div>
                     <h2 id="detailStundeTitel">Stunden-Details</h2>
                     
@@ -102,7 +170,7 @@
 
             <section id="stundenplanEditorView" style="display: none;">
                 <div class="detail-top-bar">
-                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                    <button class="btn btn-secondary" onclick="zurueckAusDetails()">🡠 Zurück</button>
                     <h2>Stundenplan bearbeiten</h2>
                 </div>
                 <div class="card" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
@@ -159,7 +227,7 @@
                     </div>
                     <div class="card">
                         <h3>Schüler anlegen & zuweisen</h3>
-                        <input type="text" id="adminSchuelerName" placeholder="Roblox Username" style="margin-bottom:10px;"><br>
+                        <input type="text" id="adminSchuelerName" placeholder="Name des Schülers" style="margin-bottom:10px;"><br>
                         <input type="text" id="adminSchuelerKlasse" placeholder="Klasse (z.B. 8rt)" style="margin-bottom:10px;"><br>
                         <button class="btn btn-primary" onclick="adminSchuelerAnlegen()">Schüler registrieren</button>
                     </div>
@@ -197,11 +265,11 @@
                         <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 15px; margin-bottom: 15px;">
                             <div>
                                 <label>Voller Name:</label>
-                                <input type="text" id="setupLehrerName" placeholder="Lehrername" style="width:100%;">
+                                <input type="text" id="setupLehrerName" placeholder="Herr Mustermann" style="width:100%;">
                             </div>
                             <div>
                                 <label>Kürzel:</label>
-                                <input type="text" id="setupLehrerKuerzel" placeholder="Kürzel" style="width:100%;">
+                                <input type="text" id="setupLehrerKuerzel" placeholder="MUST" style="width:100%;">
                             </div>
                             <div>
                                 <label>User-UID:</label>
