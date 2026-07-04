@@ -1,4 +1,23 @@
-// Dummy-Datenbank für Schüler & Beispiel-Stundenplan
+// 1. Firebase Konfiguration - ERSETZE DIESE WERTE MIT DEINEN EIGENEN AUS FIREBASE
+const firebaseConfig = {
+    apiKey: "DEIN_API_KEY",
+    authDomain: "DEIN_PROJEKT.firebaseapp.com",
+    projectId: "DEIN_PROJEKT",
+    storageBucket: "DEIN_PROJEKT.appspot.com",
+    messagingSenderId: "DEINE_MESSAGING_ID",
+    appId: "DEINE_APP_ID"
+};
+
+// Firebase initialisieren
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Globale Variablen für den Programmzustand
+let aktuelleRolle = "Lehrer"; 
+let gewaehlteStundeNummer = null;
+
+// Feste Stamm-Daten (Für ein Roblox-Rollenspiel vollkommen ausreichend)
 const StandardSchueler = ["Lasse Neumann", "Klara Schuhmacher", "Maximilian Weber", "Emma Fischer"];
 const StundenPlanStruktur = [
     { std: 1, zeit: "07:20 - 08:05", fach: "DE / Deu", lehrer: "ROIT" },
@@ -8,133 +27,190 @@ const StundenPlanStruktur = [
     { std: 5, zeit: "10:45 - 11:30", fach: "INF", lehrer: "FINN" }
 ];
 
-let gewaehlteStundeNummer = null;
-
-document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("aktuellesDatum").valueAsDate = new Date();
-    datenLadenAndRendern();
+// Firebase Beobachter: Prüft live, ob jemand ein- oder ausgeloggt ist
+auth.onAuthStateChanged(user => {
+    if (user) {
+        // Angemeldet -> App zeigen, Login verstecken
+        document.getElementById("loginView").style.display = "none";
+        document.getElementById("appView").style.display = "block";
+        document.getElementById("angemeldeterUser").innerText = user.email;
+        
+        // Datum standardmäßig auf heute setzen
+        if (!document.getElementById("aktuellesDatum").value) {
+            document.getElementById("aktuellesDatum").valueAsDate = new Date();
+        }
+        
+        // Rolle des Accounts aus Firestore auslesen
+        db.collection("users").doc(user.uid).get().then(doc => {
+            if (doc.exists && doc.data().rolle) {
+                aktuelleRolle = doc.data().rolle;
+            } else {
+                aktuelleRolle = "Lehrer"; // Rückfall-Option
+            }
+            document.getElementById("userRolleBadge").innerText = aktuelleRolle;
+            datenLadenAndRendern();
+        }).catch(err => {
+            console.error("Fehler beim Laden der Rolle:", err);
+            datenLadenAndRendern();
+        });
+    } else {
+        // Nicht angemeldet -> Login zeigen, App verstecken
+        document.getElementById("loginView").style.display = "block";
+        document.getElementById("appView").style.display = "none";
+    }
 });
 
-function datenHolen() {
-    let daten = localStorage.getItem("fuxKlassenbuchData");
-    if (!daten) {
-        return { eintraege: {} }; // Struktur für Datums- & Stundeneinträge
+// Login absenden
+function login() {
+    const email = document.getElementById("loginEmail").value;
+    const pass = document.getElementById("loginPassword").value;
+    const errorText = document.getElementById("loginError");
+    
+    errorText.innerText = "";
+
+    if (!email || !pass) {
+        errorText.innerText = "Bitte Felder ausfüllen.";
+        return;
     }
-    return JSON.parse(daten);
+
+    auth.signInWithEmailAndPassword(email, pass).catch(error => {
+        errorText.innerText = "Fehler: " + error.message;
+    });
 }
 
-function datenSpeichern(daten) {
-    localStorage.setItem("fuxKlassenbuchData", JSON.stringify(daten));
+// Ausloggen
+function logout() {
+    auth.signOut();
 }
 
+// Holt Daten für die Tagesübersicht live aus der Cloud
 function datenLadenAndRendern() {
-    let datum = document.getElementById("aktuellesDatum").value;
-    let db = datenHolen();
-    let tbody = document.getElementById("tagesStundenBody");
+    const datum = document.getElementById("aktuellesDatum").value;
+    const tbody = document.getElementById("tagesStundenBody");
     tbody.innerHTML = "";
 
+    if (!datum) return;
+
     StundenPlanStruktur.forEach(stunde => {
-        let key = `${datum}_Std${stunde.std}`;
-        let stundenDaten = db.eintraege[key] || { thema: "", hausaufgaben: "" };
+        const key = `${datum}_Std${stunde.std}`;
         
-        let row = document.createElement("tr");
-        row.innerHTML = `
-            <td><strong>${stunde.std}</strong> <br><small>${stunde.zeit}</small></td>
-            <td><span class="btn btn-secondary">${stunde.fach}</span></td>
-            <td>${stundenDaten.thema || "<em>Kein Eintrag</em>"}</td>
-            <td>${stundenDaten.hausaufgaben || "-"}</td>
-            <td>${stunde.lehrer}</td>
-            <td><button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Bearbeiten</button></td>
-        `;
-        tbody.appendChild(row);
+        db.collection("klassenbuch").doc(key).get().then(doc => {
+            const stundenDaten = doc.exists ? doc.data() : { thema: "", hausaufgaben: "" };
+            
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td><strong>${stunde.std}</strong> <br><small style="color:var(--border);">${stunde.zeit}</small></td>
+                <td><span class="btn btn-secondary" style="cursor:default;">${stunde.fach}</span></td>
+                <td>${stundenDaten.thema || "<span style='color:var(--border);'>Kein Eintrag</span>"}</td>
+                <td>${stundenDaten.hausaufgaben || "-"}</td>
+                <td>${stunde.lehrer}</td>
+                <td><button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Bearbeiten</button></td>
+            `;
+            tbody.appendChild(row);
+        }).catch(err => {
+            console.error("Fehler beim Laden der Zeile:", err);
+        });
     });
 }
 
+// Wechselt in die Detailansicht einer spezifischen Stunde
 function oeffneStunde(stdNummer) {
     gewaehlteStundeNummer = stdNummer;
-    let datum = document.getElementById("aktuellesDatum").value;
-    let stundenInfo = StundenPlanStruktur.find(s => s.std === stdNummer);
+    const datum = document.getElementById("aktuellesDatum").value;
+    const stundenInfo = StundenPlanStruktur.find(s => s.std === stdNummer);
     
-    document.getElementById("detailStundeTitel").innerText = `${datum} - ${stundenInfo.std}. Std (${stundenInfo.fach})`;
+    document.getElementById("detailStundeTitel").innerText = `${stundenInfo.std}. Stunde - ${stundenInfo.fach}`;
     
-    let db = datenHolen();
-    let key = `${datum}_Std${stdNummer}`;
-    let detail = db.eintraege[key] || { thema: "", hausaufgaben: "", anwesenheit: {} };
+    const key = `${datum}_Std${stdNummer}`;
     
-    // Inputs füllen
-    document.getElementById("unterrichtsInhalt").value = detail.thema || "";
-    document.getElementById("hausaufgabenInhalt").value = detail.hausaufgaben || "";
-    
-    // Anwesenheitsliste rendern
-    let listeUl = document.getElementById("schuelerDetailListe");
-    listeUl.innerHTML = "";
-    
-    let rolle = document.getElementById("aktuelleRolle").value;
+    db.collection("klassenbuch").doc(key).get().then(doc => {
+        const detail = doc.exists ? doc.data() : { thema: "", hausaufgaben: "", anwesenheit: {} };
+        if (!detail.anwesenheit) detail.anwesenheit = {};
 
-    StandardSchueler.forEach(name => {
-        let aktuellerStatus = detail.anwesenheit[name] || "Anwesend";
+        // Felder befüllen
+        document.getElementById("unterrichtsInhalt").value = detail.thema || "";
+        document.getElementById("hausaufgabenInhalt").value = detail.hausaufgaben || "";
         
-        let li = document.createElement("li");
-        li.className = "schueler-item";
+        // Schülerliste generieren
+        const listeUl = document.getElementById("schuelerDetailListe");
+        listeUl.innerHTML = "";
         
-        let optionen = `
-            <option value="Anwesend" ${aktuellerStatus === 'Anwesend' ? 'selected' : ''}>Anwesend</option>
-            <option value="Unentschuldigt" ${aktuellerStatus === 'Unentschuldigt' ? 'selected' : ''}>Unentschuldigt fehlt</option>
-            <option value="Verspätet" ${aktuellerStatus === 'Verspätet' ? 'selected' : ''}>Verspätet</option>
-        `;
-        
-        // Rechteprüfung für Sekretariat und Klassenleiter
-        if (rolle === "Klassenleiter" || rolle === "Sekretariat") {
-            optionen += `
-                <option value="Entschuldigt" ${aktuellerStatus === 'Entschuldigt' ? 'selected' : ''}>Entschuldigt</option>
-                <option value="Freigestellt" ${aktuellerStatus === 'Freigestellt' ? 'selected' : ''}>Freigestellt</option>
+        StandardSchueler.forEach(name => {
+            const aktuellerStatus = detail.anwesenheit[name] || "Anwesend";
+            const li = document.createElement("li");
+            li.className = "schueler-item";
+            
+            // Standard-Optionen für jeden Lehrer
+            let optionen = `
+                <option value="Anwesend" ${aktuellerStatus === 'Anwesend' ? 'selected' : ''}>Anwesend</option>
+                <option value="Unentschuldigt" ${aktuellerStatus === 'Unentschuldigt' ? 'selected' : ''}>Unentschuldigt fehlt</option>
+                <option value="Verspätet" ${aktuellerStatus === 'Verspätet' ? 'selected' : ''}>Verspätet</option>
             `;
-        } else if (aktuellerStatus === "Entschuldigt" || aktuellerStatus === "Freigestellt") {
-            optionen += `<option value="${aktuellerStatus}" selected disabled>${aktuellerStatus} (gesperrt)</option>`;
-        }
+            
+            // Sonder-Rechteprüfung für Klassenleiter und Sekretariat
+            if (aktuelleRolle === "Klassenleiter" || aktuelleRolle === "Sekretariat") {
+                optionen += `
+                    <option value="Entschuldigt" ${aktuellerStatus === 'Entschuldigt' ? 'selected' : ''}>Entschuldigt</option>
+                    <option value="Freigestellt" ${aktuellerStatus === 'Freigestellt' ? 'selected' : ''}>Freigestellt</option>
+                `;
+            } else {
+                // Wenn bereits entschuldigt/freigestellt, darf ein normaler Lehrer dies nicht ändern (gesperrt)
+                if (aktuellerStatus === "Entschuldigt" || aktuellerStatus === "Freigestellt") {
+                    optionen += `<option value="${aktuellerStatus}" selected disabled>${aktuellerStatus} (gesperrt)</option>`;
+                }
+            }
 
-        li.innerHTML = `
-            <span>${name}</span>
-            <select onchange="statusDirektSpeichern('${name}', this.value)" style="background:var(--bg-input); color:white; border:none; padding:5px; border-radius:4px;">
-                ${optionen}
-            </select>
-        `;
-        listeUl.appendChild(li);
+            li.innerHTML = `
+                <span><strong>${name}</strong></span>
+                <select class="status-select" onchange="statusDirektSpeichern('${name}', this.value)">
+                    ${optionen}
+                </select>
+            `;
+            listeUl.appendChild(li);
+        });
+
+        // Ansicht umschalten
+        document.getElementById("dashboardView").style.display = "none";
+        document.getElementById("detailView").style.display = "block";
     });
-
-    document.getElementById("dashboardView").style.display = "none";
-    document.getElementById("detailView").style.display = "block";
 }
 
+// Speichert den Status eines Schülers bei Klick sofort in der Cloud
 function statusDirektSpeichern(schuelerName, neuerStatus) {
-    let datum = document.getElementById("aktuellesDatum").value;
-    let db = datenHolen();
-    let key = `${datum}_Std${gewaehlteStundeNummer}`;
+    const datum = document.getElementById("aktuellesDatum").value;
+    const key = `${datum}_Std${gewaehlteStundeNummer}`;
     
-    if (!db.eintraege[key]) db.eintraege[key] = { thema: "", hausaufgaben: "", anwesenheit: {} };
-    if (!db.eintraege[key].anwesenheit) db.eintraege[key].anwesenheit = {};
-    
-    db.eintraege[key].anwesenheit[schuelerName] = neuerStatus;
-    datenSpeichern(db);
+    const updateObj = {};
+    updateObj[`anwesenheit.${schuelerName}`] = neuerStatus;
+
+    db.collection("klassenbuch").doc(key).update(updateObj).catch(() => {
+        // Falls das Dokument am heutigen Tag noch gar nicht existiert, erstellen wir es neu
+        const initial = { anwesenheit: {} };
+        initial.anwesenheit[schuelerName] = neuerStatus;
+        db.collection("klassenbuch").doc(key).set(initial, { merge: true });
+    });
 }
 
+// Speichert Thema/Hausaufgaben und kehrt zum Dashboard zurück
 function stundeSpeichernUndSchliessen() {
-    let datum = document.getElementById("aktuellesDatum").value;
-    let db = datenHolen();
-    let key = `${datum}_Std${gewaehlteStundeNummer}`;
+    const datum = document.getElementById("aktuellesDatum").value;
+    const key = `${datum}_Std${gewaehlteStundeNummer}`;
     
-    if (!db.eintraege[key]) db.eintraege[key] = { thema: "", hausaufgaben: "", anwesenheit: {} };
+    const daten = {
+        thema: document.getElementById("unterrichtsInhalt").value,
+        hausaufgaben: document.getElementById("hausaufgabenInhalt").value
+    };
     
-    db.eintraege[key].thema = document.getElementById("unterrichtsInhalt").value;
-    db.eintraege[key].hausaufgaben = document.getElementById("hausaufgabenInhalt").value;
-    
-    datenSpeichern(db);
-    zeigeDashboard();
+    db.collection("klassenbuch").doc(key).set(daten, { merge: true }).then(() => {
+        zeigeDashboard();
+    }).catch(err => {
+        console.error("Fehler beim Signieren:", err);
+    });
 }
 
+// Zurück-Funktion fürs Dashboard
 function zeigeDashboard() {
     document.getElementById("detailView").style.display = "none";
     document.getElementById("dashboardView").style.display = "block";
     datenLadenAndRendern();
 }
-
