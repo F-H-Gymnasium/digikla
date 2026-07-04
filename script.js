@@ -18,13 +18,10 @@ let gewaehlteStundeNummer = null;
 let AktuellerTagesPlan = [];
 let GeladeneSchueler = [];
 
-// Globale Profildaten des aktuell angemeldeten Lehrers
 let MeinLehrerProfil = { name: "Unbekannter Lehrer", kuerzel: "KST" };
-
-// Globale Caches für Grundeinstellungen und Lehrerzuordnungen
 let GlobalSchuljahrConfig = { start: "", end: "", text: "" };
 let GlobalUnterrichtsZeiten = [];
-let AlleLehrerCache = {}; // Format: { "UID": { name: "...", kuerzel: "..." } }
+let AlleLehrerCache = {}; 
 
 auth.onAuthStateChanged(user => {
     if (user) {
@@ -32,18 +29,15 @@ auth.onAuthStateChanged(user => {
         document.getElementById("loginView").style.display = "none";
         document.getElementById("appView").style.display = "block";
         
-        // 1. Grundeinstellungen & alle Lehrer laden
         Promise.all([
             ladeGrundeinstellungenVonCloud(),
             ladeAlleLehrerProfile()
         ]).then(() => {
-            // Eigenes Profil bestimmen
             if (AlleLehrerCache[user.uid]) {
                 MeinLehrerProfil = AlleLehrerCache[user.uid];
             }
             document.getElementById("angemeldeterUser").innerText = `${MeinLehrerProfil.name} (${MeinLehrerProfil.kuerzel})`;
             
-            // 2. Rolle laden
             db.collection("users").doc(user.uid).get().then(doc => {
                 aktuelleRolle = doc.exists ? (doc.data().rolle || "Lehrer") : "Lehrer";
                 document.getElementById("userRolleBadge").innerText = aktuelleRolle;
@@ -51,8 +45,6 @@ auth.onAuthStateChanged(user => {
                 if (aktuelleRolle === "Admin") {
                     document.getElementById("adminPanelBtn").style.display = "inline-block";
                 }
-                
-                // 3. Klassen laden
                 klassenDropdownLaden();
             });
         });
@@ -86,27 +78,22 @@ function ladeGrundeinstellungenVonCloud() {
 function ladeAlleLehrerProfile() {
     return db.collection("lehrerProfile").get().then(snapshot => {
         AlleLehrerCache = {};
-        snapshot.forEach(doc => {
-            AlleLehrerCache[doc.id] = doc.data(); // doc.id ist die Lehrer-UID
-        });
+        snapshot.forEach(doc => { AlleLehrerCache[doc.id] = doc.data(); });
     });
 }
 
 function klassenDropdownLaden() {
     const dropdown = document.getElementById("klassenAuswahl");
     dropdown.innerHTML = "";
-    
     db.collection("klassen").get().then(snapshot => {
         if(snapshot.empty) return;
         dropdown.style.display = "inline-block";
-        
         snapshot.forEach(doc => {
             let opt = document.createElement("option");
             opt.value = doc.id;
             opt.innerText = "Klasse " + doc.id;
             dropdown.appendChild(opt);
         });
-        
         datenLadenAndRendern();
     });
 }
@@ -128,21 +115,13 @@ function datenLadenAndRendern() {
 
     document.getElementById("klassenTitel").innerText = `Tagesübersicht - Klasse ${klasse}`;
 
-    // Klassenleiter-Anzeige übersetzen
     db.collection("klassen").doc(klasse).get().then(doc => {
         if(doc.exists) {
             const klUID = doc.data().klassenleiter || "";
             let klName = "Keiner";
-            
-            if (AlleLehrerCache[klUID]) {
-                klName = AlleLehrerCache[klUID].name;
-            } else if (klUID) {
-                klName = klUID; // Fallback falls kein Profil existiert
-            }
-            
+            if (AlleLehrerCache[klUID]) klName = AlleLehrerCache[klUID].name;
             document.getElementById("klassenleiterInfo").innerHTML = `<strong>Klassenleiter:</strong> ${klName}`;
             
-            // Edit-Rechte für den Stundenplan festlegen
             if (aktuelleRolle === "Admin" || currentUserUID === klUID) {
                 document.getElementById("stundenplanEditBtn").style.display = "inline-block";
             } else {
@@ -173,27 +152,31 @@ function datenLadenAndRendern() {
         AktuellerTagesPlan.forEach(stunde => {
             const key = `${klasse}_${datumString}_Std${stunde.std}`;
             db.collection("klassenbuch").doc(key).get().then(bDoc => {
-                const sDaten = bDoc.exists ? bDoc.data() : { thema: "", hausaufgaben: "" };
+                const sDaten = bDoc.exists ? bDoc.data() : {};
                 
-                // RECHTE-PRÜFUNG FÜR DIE AKTION (Kürzel-Sperre)
-                let darfBearbeiten = false;
-                if (aktuelleRolle === "Admin" || aktuelleRolle === "Sekretariat") {
-                    darfBearbeiten = true;
-                } else if (stunde.lehrer === MeinLehrerProfil.kuerzel) {
-                    darfBearbeiten = true;
+                // Nutze Vertretungsdaten falls vorhanden, sonst Standard aus dem Plan
+                let aktuellesFach = sDaten.vFach || stunde.fach;
+                let aktuellerLehrer = sDaten.vLehrer || stunde.lehrer;
+                
+                if (sDaten.istAusfall) {
+                    aktuellesFach = `<span style="color:var(--danger); text-decoration:line-through;">${stunde.fach}</span> <small>(Ausfall)</small>`;
+                    aktuellerLehrer = "-";
+                } else if (sDaten.vFach && sDaten.vFach !== stunde.fach) {
+                    aktuellesFach = `${sDaten.vFach} <br><small style="color:var(--warning);">statt ${stunde.fach}</small>`;
                 }
 
-                const buttonHTML = darfBearbeiten 
-                    ? `<button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Bearbeiten</button>`
-                    : `<button class="btn" disabled title="Nur für Lehrer mit Kürzel ${stunde.lehrer}">Gesperrt</button>`;
+                // JEDER darf jetzt in die Ansicht klicken!
+                const buttonHTML = `<button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Ansehen / Bearbeiten</button>`;
 
                 const row = document.createElement("tr");
+                if(sDaten.isSigniert) row.style.opacity = "0.8";
+
                 row.innerHTML = `
                     <td><strong>${stunde.std}</strong> <br><small style="color:var(--border);">${stunde.zeit}</small></td>
-                    <td><span class="btn btn-secondary" style="cursor:default;">${stunde.fach}</span></td>
+                    <td><span class="btn btn-secondary" style="cursor:default;">${aktuellesFach}</span></td>
                     <td>${sDaten.thema || "<em>Kein Eintrag</em>"}</td>
                     <td>${sDaten.hausaufgaben || "-"}</td>
-                    <td><strong>${stunde.lehrer}</strong></td>
+                    <td><strong>${aktuellerLehrer}</strong> ${sDaten.isSigniert ? "🔒" : ""}</td>
                     <td>${buttonHTML}</td>
                 `;
                 tbody.appendChild(row);
@@ -208,16 +191,62 @@ function oeffneStunde(stdNummer) {
     const datum = document.getElementById("aktuellesDatum").value;
     const stundenInfo = AktuellerTagesPlan.find(s => s.std === stdNummer);
     
-    document.getElementById("detailStundeTitel").innerText = `${stundenInfo.std}. Stunde - ${stundenInfo.fach}`;
     const key = `${klasse}_${datum}_Std${stdNummer}`;
     
     db.collection("klassenbuch").doc(key).get().then(doc => {
         const detail = doc.exists ? doc.data() : { thema: "", hausaufgaben: "", anwesenheit: {} };
         if (!detail.anwesenheit) detail.anwesenheit = {};
 
-        document.getElementById("unterrichtsInhalt").value = detail.thema || "";
-        document.getElementById("hausaufgabenInhalt").value = detail.hausaufgaben || "";
+        // Ermittle wer laut Plan / Vertretung gerade drin steht
+        let stundenLehrer = detail.vLehrer || stundenInfo.lehrer;
+        let istAusfall = detail.istAusfall || false;
+        let isSigniert = detail.isSigniert || false;
+
+        // Rechte-Prüfung: Gehört mir die Stunde, oder bin ich Admin/Sekretariat?
+        let binBerechtigt = (aktuelleRolle === "Admin" || aktuelleRolle === "Sekretariat" || (stundenLehrer === MeinLehrerProfil.kuerzel && !istAusfall));
         
+        // Wenn signiert ist, kann NIEMAND mehr schreiben, außer man bricht das Signum auf
+        let schreibgesperrt = isSigniert || !binBerechtigt;
+
+        // Felder aktivieren/deaktivieren
+        document.getElementById("unterrichtsInhalt").value = detail.thema || "";
+        document.getElementById("unterrichtsInhalt").disabled = schreibgesperrt;
+        document.getElementById("hausaufgabenInhalt").value = detail.hausaufgaben || "";
+        document.getElementById("hausaufgabenInhalt").disabled = schreibgesperrt;
+
+        // UI Header Text
+        let anzeigeFach = detail.vFach || stundenInfo.fach;
+        document.getElementById("detailStundeTitel").innerText = `${stundenInfo.std}. Stunde - ${anzeigeFach} (${stundenLehrer})`;
+
+        // Hinweisbox steuern
+        const hinweis = document.getElementById("statusHinweisBox");
+        if (isSigniert) {
+            hinweis.style.display = "block";
+            hinweis.style.backgroundColor = "var(--success)";
+            hinweis.innerText = "Diese Stunde wurde erfolgreich signiert und ist gesperrt.";
+        } else if (!binBerechtigt) {
+            hinweis.style.display = "block";
+            hinweis.style.backgroundColor = "var(--bg-input)";
+            hinweis.innerText = "Schreibgeschützte Ansicht. Übernimm oder ändere den Unterricht, um Einträge zu machen.";
+        } else {
+            hinweis.style.display = "none";
+        }
+
+        // Steuerung der 3 Buttons oben rechts
+        if (isSigniert) {
+            document.getElementById("btnUnterrichtAendern").style.display = "none";
+            document.getElementById("btnUnterrichtUebernehmen").style.display = "none";
+            document.getElementById("btnUnterrichtSignieren").style.display = "none";
+            // Nur Admins, Sekretariat oder der signierende Lehrer dürfen das Signum brechen
+            document.getElementById("btnSignumZuruecknehmen").style.display = binBerechtigt ? "inline-block" : "none";
+        } else {
+            document.getElementById("btnUnterrichtAendern").style.display = "inline-block";
+            document.getElementById("btnUnterrichtUebernehmen").style.display = "inline-block";
+            document.getElementById("btnUnterrichtSignieren").style.display = binBerechtigt ? "inline-block" : "none";
+            document.getElementById("btnSignumZuruecknehmen").style.display = "none";
+        }
+
+        // Schülerliste rendern
         const listeUl = document.getElementById("schuelerDetailListe");
         listeUl.innerHTML = "";
         
@@ -242,12 +271,95 @@ function oeffneStunde(stdNummer) {
             }
 
             li.innerHTML = `<span><strong>${name}</strong></span>
-                <select class="status-select" onchange="statusDirektSpeichern('${name}', this.value)">${optionen}</select>`;
+                <select class="status-select" ${schreibgesperrt ? 'disabled' : ''} onchange="statusDirektSpeichern('${name}', this.value)">${optionen}</select>`;
             listeUl.appendChild(li);
         });
 
         hideAllViews();
         document.getElementById("detailView").style.display = "block";
+    });
+}
+
+// BUTTON: UNTERRICHT ÄNDERN (Vertretung / Ausfall)
+function unterrichtAendernDialog() {
+    const wahl = prompt("Gib ein Fachkürzel ein (z.B. MA), um eine Vertretung zu setzen. Gib 'AUSFALL' ein, um die Stunde ausfallen zu lassen.");
+    if (wahl === null) return;
+
+    const klasse = document.getElementById("klassenAuswahl").value;
+    const datum = document.getElementById("aktuellesDatum").value;
+    const key = `${klasse}_${datum}_Std${gewaehlteStundeNummer}`;
+
+    if (wahl.trim().toUpperCase() === "AUSFALL") {
+        db.collection("klassenbuch").doc(key).set({
+            istAusfall: true,
+            vFach: "",
+            vLehrer: ""
+        }, { merge: true }).then(() => oeffneStunde(gewaehlteStundeNummer));
+    } else if (wahl.trim()) {
+        const neuerLehrer = prompt("Welcher Lehrer hält die Vertretung? (Kürzel eingeben, z.B. DIET)");
+        if (!neuerLehrer) return;
+
+        db.collection("klassenbuch").doc(key).set({
+            istAusfall: false,
+            vFach: wahl.trim().toUpperCase(),
+            vLehrer: neuerLehrer.trim().toUpperCase()
+        }, { merge: true }).then(() => oeffneStunde(gewaehlteStundeNummer));
+    }
+}
+
+// BUTTON: UNTERRICHT ÜBERNEHMEN
+function unterrichtUebernehmenDialog() {
+    const klasse = document.getElementById("klassenAuswahl").value;
+    const datum = document.getElementById("aktuellesDatum").value;
+    const stundenInfo = AktuellerTagesPlan.find(s => s.std === gewaehlteStundeNummer);
+    const key = `${klasse}_${datum}_Std${gewaehlteStundeNummer}`;
+
+    const beibehalten = confirm(`Möchtest du das aktuelle Fach (${stundenInfo.fach}) beibehalten?\n\n[OK] = Altes Fach belassen, nur Lehrer zu dir wechseln.\n[Abbrechen] = Anderes Fach eintragen.`);
+    
+    let neuesFach = stundenInfo.fach;
+    if (!beibehalten) {
+        let f = prompt("Welches Fach möchtest du stattdessen unterrichten?");
+        if (!f) return;
+        neuesFach = f.trim().toUpperCase();
+    }
+
+    db.collection("klassenbuch").doc(key).set({
+        istAusfall: false,
+        vFach: neuesFach,
+        vLehrer: MeinLehrerProfil.kuerzel
+    }, { merge: true }).then(() => {
+        alert("Du hast den Unterricht erfolgreich übernommen!");
+        oeffneStunde(gewaehlteStundeNummer);
+    });
+}
+
+// BUTTON: SIGNIEREN
+function stundeSignieren() {
+    const klasse = document.getElementById("klassenAuswahl").value;
+    const datum = document.getElementById("aktuellesDatum").value;
+    const key = `${klasse}_${datum}_Std${gewaehlteStundeNummer}`;
+
+    db.collection("klassenbuch").doc(key).set({
+        thema: document.getElementById("unterrichtsInhalt").value,
+        hausaufgaben: document.getElementById("hausaufgabenInhalt").value,
+        isSigniert: true
+    }, { merge: true }).then(() => {
+        alert("Stunde erfolgreich signiert!");
+        oeffneStunde(gewaehlteStundeNummer);
+    });
+}
+
+// BUTTON: SIGNUM ZURÜCKNEHMEN
+function signumZuruecknehmen() {
+    const klasse = document.getElementById("klassenAuswahl").value;
+    const datum = document.getElementById("aktuellesDatum").value;
+    const key = `${klasse}_${datum}_Std${gewaehlteStundeNummer}`;
+
+    db.collection("klassenbuch").doc(key).set({
+        isSigniert: false
+    }, { merge: true }).then(() => {
+        alert("Signum wurde aufgehoben. Die Stunde kann wieder editiert werden.");
+        oeffneStunde(gewaehlteStundeNummer);
     });
 }
 
@@ -320,7 +432,7 @@ function speichereStundenplan() {
 
     for(let i = 1; i <= anzahlStunden; i++) {
         let fachVal = document.getElementById(`editFach${i}`).value.trim();
-        let lehrerVal = document.getElementById(`editLehrer${i}`).value.trim().toUpperCase(); // Automatisch Großbuchstaben
+        let lehrerVal = document.getElementById(`editLehrer${i}`).value.trim().toUpperCase();
         let zeitVal = document.getElementById(`editZeitAnzeige${i}`).innerText;
         
         if(fachVal && zeitVal !== "Nicht definiert") {
@@ -336,7 +448,6 @@ function speichereStundenplan() {
     });
 }
 
-// ADMIN PANEL TABS & SETUPS
 function zeigeAdminPanel() {
     hideAllViews();
     document.getElementById("adminPanelView").style.display = "block";
@@ -387,7 +498,7 @@ function speichereGrundeinstellungen() {
         zeitenArray.push(val);
     }
 
-    db.collection("einstellungen").doc("allgemein").set({
+    db.collection("einstellungen").doc("allgewohnt").set({
         schuljahr: sj, startDatum: start, endDatum: end, zeiten: zeitenArray
     }).then(() => {
         alert("Grundeinstellungen gesichert!");
@@ -395,7 +506,6 @@ function speichereGrundeinstellungen() {
     });
 }
 
-// NEU: LEHRER PROFIL ERSTELLEN LOGIK
 function adminLehrerAnlegen() {
     const name = document.getElementById("setupLehrerName").value.trim();
     const kuerzel = document.getElementById("setupLehrerKuerzel").value.trim().toUpperCase();
@@ -406,16 +516,11 @@ function adminLehrerAnlegen() {
         return;
     }
 
-    db.collection("lehrerProfile").doc(uid).set({
-        name: name,
-        kuerzel: kuerzel
-    }).then(() => {
-        alert(`Profil für ${name} (${kuerzel}) erfolgreich angelegt!`);
+    db.collection("lehrerProfile").doc(uid).set({ name: name, kuerzel: kuerzel }).then(() => {
+        alert(`Profil für ${name} (${kuerzel}) angelegt!`);
         document.getElementById("setupLehrerName").value = "";
         document.getElementById("setupLehrerKuerzel").value = "";
         document.getElementById("setupLehrerUID").value = "";
-        
-        // Caches neu laden, damit Änderungen sofort aktiv sind
         ladeAlleLehrerProfile().then(() => datenLadenAndRendern());
     });
 }
