@@ -48,7 +48,7 @@
                 <div class="section-header">
                     <h2 id="klassenTitel">Tagesübersicht</h2>
                     <div class="info-badges">
-                        <span id="klassenleiterInfo"><strong>Klassenleiter:</strong> -</span>
+                        <span id="klassenleiterInfo"><strong>Klassenleiter:</strong> Lade...</span>
                     </div>
                 </div>
                 
@@ -131,7 +131,7 @@
                 
                 <div style="margin-bottom: 20px; display: flex; gap: 10px;">
                     <button class="btn btn-primary" id="btnTabKlassen" onclick="wechsleAdminTab('klassen')">Klassen & Schüler</button>
-                    <button class="btn btn-secondary" id="btnTabEinstellungen" onclick="wechsleAdminTab('einstellungen')">Grundeinstellungen</button>
+                    <button class="btn btn-secondary" id="btnTabEinstellungen" onclick="wechsleAdminTab('einstellungen')">Grundeinstellungen & Lehrer</button>
                 </div>
 
                 <div id="adminTabKlassen" class="detail-grid">
@@ -149,35 +149,55 @@
                     </div>
                 </div>
 
-                <div id="adminTabEinstellungen" class="card" style="display: none;">
-                    <h3>Allgemeine Schuldaten</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                        <div>
-                            <label>Schuljahr (z.B. 2025/2026):</label>
-                            <input type="text" id="setupSchuljahr" placeholder="2025/2026" style="width:100%;">
+                <div id="adminTabEinstellungen" style="display: none;">
+                    <div class="card">
+                        <h3>Allgemeine Schuldaten</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                            <div>
+                                <label>Schuljahr (z.B. 2025/2026):</label>
+                                <input type="text" id="setupSchuljahr" placeholder="2025/2026" style="width:100%;">
+                            </div>
+                            <div>
+                                <label>Anfangsdatum:</label>
+                                <input type="date" id="setupStartDatum" style="width:100%;">
+                            </div>
+                            <div>
+                                <label>Enddatum:</label>
+                                <input type="date" id="setupEndDatum" style="width:100%;">
+                            </div>
                         </div>
-                        <div>
-                            <label>Anfangsdatum:</label>
-                            <input type="date" id="setupStartDatum" style="width:100%;">
-                        </div>
-                        <div>
-                            <label>Enddatum:</label>
-                            <input type="date" id="setupEndDatum" style="width:100%;">
-                        </div>
+
+                        <h3>Unterrichtszeiten definieren (Bis zu 8 Stunden)</h3>
+                        <table class="stunden-tabelle" style="max-width: 500px;">
+                            <thead>
+                                <tr>
+                                    <th>Stunde</th>
+                                    <th>Zeitspanne (z.B. 07:20 - 08:05)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="setupZeitenBody"></tbody>
+                        </table>
+                        <button class="btn btn-primary" style="margin-top: 20px;" onclick="speichereGrundeinstellungen()">Grundeinstellungen sichern</button>
                     </div>
 
-                    <h3>Unterrichtszeiten definieren (Bis zu 8 Stunden)</h3>
-                    <table class="stunden-tabelle" style="max-width: 500px;">
-                        <thead>
-                            <tr>
-                                <th>Stunde</th>
-                                <th>Zeitspanne (z.B. 07:20 - 08:05)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="setupZeitenBody">
-                            </tbody>
-                    </table>
-                    <button class="btn btn-primary" style="margin-top: 20px;" onclick="speichereGrundeinstellungen()">Grundeinstellungen sichern</button>
+                    <div class="card">
+                        <h3>Lehrer-Profile anlegen (UID zu Name & Kürzel)</h3>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label>Voller Name (z.B. Herr Roit):</label>
+                                <input type="text" id="setupLehrerName" placeholder="Herr Roit" style="width:100%;">
+                            </div>
+                            <div>
+                                <label>Kürzel (z.B. ROIT):</label>
+                                <input type="text" id="setupLehrerKuerzel" placeholder="ROIT" style="width:100%;">
+                            </div>
+                            <div>
+                                <label>User-UID aus Authentication:</label>
+                                <input type="text" id="setupLehrerUID" placeholder="4kLp9x..." style="width:100%;">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="adminLehrerAnlegen()">Lehrer-Profil speichern</button>
+                    </div>
                 </div>
             </section>
 
