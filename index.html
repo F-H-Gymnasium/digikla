@@ -3,30 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Roblox Klassenbuch</title>
+    <title>DigiKla</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div class="container">
-        <h1>Roblox Klassenbuch</h1>
+        <h1>Roblox Digitales Klassenbuch</h1>
         
-        <div class="input-area">
-            <input type="text" id="schuelerName" placeholder="Roblox Username eingeben...">
-            <button onclick="schuelerHinzufuegen()">Hinzufügen</button>
+        <div class="setup-area">
+            <div>
+                <label>Deine Rolle: </label>
+                <select id="aktuelleRolle" onchange="ansichtAktualisieren()">
+                    <option value="Lehrer">Lehrer</option>
+                    <option value="Klassenleiter">Klassenleiter</option>
+                    <option value="Sekretariat">Sekretariat</option>
+                </select>
+            </div>
+            <div>
+                <label>Datum: </label>
+                <input type="date" id="aktuellesDatum" onchange="ansichtAktualisieren()">
+            </div>
         </div>
 
-        <table>
+        <hr>
+
+        <h3>Stundenübersicht</h3>
+        <div class="stunden-liste" id="stundenListe">
+            </div>
+
+        <h3 id="aktuelleStundeTitel">Bitte wähle eine Stunde aus</h3>
+
+        <table id="anwesenheitsTabelle" style="display:none;">
             <thead>
                 <tr>
                     <th>Schülername</th>
-                    <th>Status</th>
-                    <th>Aktion</th>
+                    <th>Status für diese Stunde</th>
                 </tr>
             </thead>
-            <tbody id="schuelerListe">
+            <tbody id="schuelerListeAnwesenheit">
                 </tbody>
         </table>
+
+        <hr>
+        
+        <h3>Schüler-Datenbank verwalten</h3>
+        <div class="input-area">
+            <input type="text" id="neuerSchuelerName" placeholder="Roblox Username...">
+            <button onclick="schuelerHinzufuegen()">Schüler registrieren</button>
+        </div>
     </div>
 
     <script src="script.js"></script>
