@@ -18,6 +18,10 @@ let gewaehlteStundeNummer = null;
 let AktuellerTagesPlan = [];
 let GeladeneSchueler = [];
 
+// Globale Speicher für geladene Grundeinstellungen
+let GlobalSchuljahrConfig = { start: "", end: "", text: "" };
+let GlobalUnterrichtsZeiten = []; // Array von Strings ["07:20 - 08:05", ...]
+
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUserUID = user.uid;
@@ -29,17 +33,20 @@ auth.onAuthStateChanged(user => {
             document.getElementById("aktuellesDatum").valueAsDate = new Date();
         }
         
-        // Rolle des Nutzers laden
-        db.collection("users").doc(user.uid).get().then(doc => {
-            aktuelleRolle = doc.exists ? (doc.data().rolle || "Lehrer") : "Lehrer";
-            document.getElementById("userRolleBadge").innerText = aktuelleRolle;
-            
-            if (aktuelleRolle === "Admin") {
-                document.getElementById("adminPanelBtn").style.display = "inline-block";
-            }
-            
-            // Klassen-Dropdown befüllen
-            klassenDropdownLaden();
+        // 1. Grundeinstellungen aus Cloud laden
+        ladeGrundeinstellungenVonCloud().then(() => {
+            // 2. Rolle laden
+            db.collection("users").doc(user.uid).get().then(doc => {
+                aktuelleRolle = doc.exists ? (doc.data().rolle || "Lehrer") : "Lehrer";
+                document.getElementById("userRolleBadge").innerText = aktuelleRolle;
+                
+                if (aktuelleRolle === "Admin") {
+                    document.getElementById("adminPanelBtn").style.display = "inline-block";
+                }
+                
+                // 3. Klassen laden
+                klassenDropdownLaden();
+            });
         });
     } else {
         document.getElementById("loginView").style.display = "block";
@@ -56,6 +63,24 @@ function login() {
 }
 
 function logout() { auth.signOut(); }
+
+// Holt Schuljahr und Zeiten aus Firestore
+function ladeGrundeinstellungenVonCloud() {
+    return db.collection("einstellungen").doc("allgemein").get().then(doc => {
+        if (doc.exists) {
+            const data = doc.data();
+            GlobalSchuljahrConfig = {
+                text: data.schuljahr || "",
+                start: data.startDatum || "",
+                end: data.endDatum || ""
+            };
+            GlobalUnterrichtsZeiten = data.zeiten || [];
+            
+            // Header Anzeige befüllen
+            document.getElementById("schuljahrAnzeige").innerText = GlobalSchuljahrConfig.text ? `Sj. ${GlobalSchuljahrConfig.text}` : "";
+        }
+    });
+}
 
 function klassenDropdownLaden() {
     const dropdown = document.getElementById("klassenAuswahl");
@@ -84,15 +109,21 @@ function datenLadenAndRendern() {
 
     if (!klasse || !datumString) return;
 
+    // Datumsprüfung (Liegt es im Schuljahr?)
+    if (GlobalSchuljahrConfig.start && GlobalSchuljahrConfig.end) {
+        if (datumString < GlobalSchuljahrConfig.start || datumString > GlobalSchuljahrConfig.end) {
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; color:var(--danger); font-weight:bold;'>Datum liegt außerhalb des konfigurierten Schuljahres!</td></tr>";
+            return;
+        }
+    }
+
     document.getElementById("klassenTitel").innerText = `Tagesübersicht - Klasse ${klasse}`;
 
-    // Klassenleiter-Info laden & Rechte prüfen
     db.collection("klassen").doc(klasse).get().then(doc => {
         if(doc.exists) {
             const klUID = doc.data().klassenleiter || "";
             document.getElementById("klassenleiterInfo").innerHTML = `<strong>Klassenleiter-UID:</strong> ${klUID}`;
             
-            // Wenn der User Admin oder Klassenleiter dieser spezifischen Klasse ist, darf er den Plan bearbeiten
             if (aktuelleRolle === "Admin" || currentUserUID === klUID) {
                 document.getElementById("stundenplanEditBtn").style.display = "inline-block";
             } else {
@@ -101,7 +132,6 @@ function datenLadenAndRendern() {
         }
     });
 
-    // Schüler der Klasse laden
     db.collection("schueler").where("klasse", "==", klasse).get().then(snapshot => {
         GeladeneSchueler = [];
         snapshot.forEach(d => GeladeneSchueler.push(d.data().name));
@@ -113,7 +143,6 @@ function datenLadenAndRendern() {
         return;
     }
 
-    // Stundenplan für diesen Wochentag aus der Klasse laden
     db.collection("klassen").doc(klasse).collection("stundenplaene").doc(String(wochentag)).get().then(doc => {
         AktuellerTagesPlan = doc.exists ? (doc.data().stunden || []) : [];
         
@@ -216,7 +245,7 @@ function stundeSpeichernUndSchliessen() {
     }, { merge: true }).then(() => zeigeDashboard());
 }
 
-// STUNDENPLAN-EDITOR STEUERUNG
+// STUNDENPLAN-EDITOR (Zieht sich jetzt die vordefinierten Zeiten)
 function zeigeStundenplanEditor() {
     hideAllViews();
     document.getElementById("stundenplanEditorView").style.display = "block";
@@ -230,17 +259,20 @@ function ladeEditorPlanForDay() {
     const tbody = document.getElementById("editorStundenBody");
     tbody.innerHTML = "";
 
-    const StandardZeiten = ["07:20 - 08:05", "08:15 - 09:00", "09:00 - 09:45", "10:00 - 10:45", "10:45 - 11:30", "12:00 - 12:45"];
+    // Falls der Admin weniger als 8 Stunden definiert hat, füllen wir auf
+    const anzahlStunden = Math.max(GlobalUnterrichtsZeiten.length, 6);
 
     db.collection("klassen").doc(klasse).collection("stundenplaene").doc(tag).get().then(doc => {
         const existierenderPlan = doc.exists ? (doc.data().stunden || []) : [];
         
-        for (let i = 1; i <= 6; i++) {
-            let alteStd = existierenderPlan.find(s => s.std === i) || { fach: "", lehrer: "", zeit: StandardZeiten[i-1] };
+        for (let i = 1; i <= anzahlStunden; i++) {
+            let vordefinierteZeit = GlobalUnterrichtsZeiten[i-1] || "";
+            let alteStd = existierenderPlan.find(s => s.std === i) || { fach: "", lehrer: "", zeit: vordefinierteZeit };
+            
             let row = document.createElement("tr");
             row.innerHTML = `
                 <td><strong>${i}</strong></td>
-                <td><input type="text" id="editZeit${i}" value="${alteStd.zeit}"></td>
+                <td><span id="editZeitAnzeige${i}" style="font-weight:600; color:#94a3b8;">${vordefinierteZeit || "Nicht definiert"}</span></td>
                 <td><input type="text" id="editFach${i}" value="${alteStd.fach}" placeholder="z.B. MA"></td>
                 <td><input type="text" id="editLehrer${i}" value="${alteStd.lehrer}" placeholder="z.B. FINN"></td>
             `;
@@ -254,12 +286,14 @@ function speichereStundenplan() {
     const tag = document.getElementById("editWochentag").value;
     
     let neueStunden = [];
-    for(let i = 1; i <= 6; i++) {
+    const anzahlStunden = Math.max(GlobalUnterrichtsZeiten.length, 6);
+
+    for(let i = 1; i <= anzahlStunden; i++) {
         let fachVal = document.getElementById(`editFach${i}`).value.trim();
         let lehrerVal = document.getElementById(`editLehrer${i}`).value.trim();
-        let zeitVal = document.getElementById(`editZeit${i}`).value.trim();
+        let zeitVal = document.getElementById(`editZeitAnzeige${i}`).innerText;
         
-        if(fachVal) {
+        if(fachVal && zeitVal !== "Nicht definiert") {
             neueStunden.push({ std: i, zeit: zeitVal, fach: fachVal, lehrer: lehrerVal });
         }
     }
@@ -272,10 +306,67 @@ function speichereStundenplan() {
     });
 }
 
-// ADMIN PANEL LOGIK
+// ADMIN PANEL TABS & GRUNDEINSTELLUNGEN
 function zeigeAdminPanel() {
     hideAllViews();
     document.getElementById("adminPanelView").style.display = "block";
+    wechsleAdminTab('klassen');
+    baueAdminZeitenSetupTabelle();
+}
+
+function wechsleAdminTab(tabName) {
+    if(tabName === 'klassen') {
+        document.getElementById("adminTabKlassen").style.display = "grid";
+        document.getElementById("adminTabEinstellungen").style.display = "none";
+        document.getElementById("btnTabKlassen").className = "btn btn-primary";
+        document.getElementById("btnTabEinstellungen").className = "btn btn-secondary";
+    } else {
+        document.getElementById("adminTabKlassen").style.display = "none";
+        document.getElementById("adminTabEinstellungen").style.display = "block";
+        document.getElementById("btnTabKlassen").className = "btn btn-secondary";
+        document.getElementById("btnTabEinstellungen").className = "btn btn-primary";
+        
+        // Werte in Inputs laden
+        document.getElementById("setupSchuljahr").value = GlobalSchuljahrConfig.text;
+        document.getElementById("setupStartDatum").value = GlobalSchuljahrConfig.start;
+        document.getElementById("setupEndDatum").value = GlobalSchuljahrConfig.end;
+    }
+}
+
+function baueAdminZeitenSetupTabelle() {
+    const tbody = document.getElementById("setupZeitenBody");
+    tbody.innerHTML = "";
+    for(let i = 1; i <= 8; i++) {
+        let alteZeit = GlobalUnterrichtsZeiten[i-1] || "";
+        let row = document.createElement("tr");
+        row.innerHTML = `
+            <td><strong>${i}. Stunde</strong></td>
+            <td><input type="text" id="setupZeitSpanne${i}" value="${alteZeit}" placeholder="z.B. 07:20 - 08:05"></td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
+function speichereGrundeinstellungen() {
+    const sj = document.getElementById("setupSchuljahr").value.trim();
+    const start = document.getElementById("setupStartDatum").value;
+    const end = document.getElementById("setupEndDatum").value;
+    
+    let zeitenArray = [];
+    for(let i = 1; i <= 8; i++) {
+        let val = document.getElementById(`setupZeitSpanne${i}`).value.trim();
+        zeitenArray.push(val); // Wir pushen auch leere, filtern sie beim Laden oder lassen sie unbesetzt
+    }
+
+    db.collection("einstellungen").doc("allgemein").set({
+        schuljahr: sj,
+        startDatum: start,
+        endDatum: end,
+        zeiten: zeitenArray
+    }).then(() => {
+        alert("Grundeinstellungen erfolgreich in der Cloud gespeichert!");
+        ladeGrundeinstellungenVonCloud().then(() => zeigeDashboard());
+    });
 }
 
 function adminKlasseErstellen() {
