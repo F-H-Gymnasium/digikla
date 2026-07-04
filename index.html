@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digitales Klassenbuch - Portal</title>
+    <title>Digitales Klassenbuch - Management</title>
     <link rel="stylesheet" href="style.css">
     
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -15,7 +15,7 @@
     <div id="loginView" class="container" style="max-width: 400px; margin: 100px auto;">
         <h2 style="color: #0284c7; text-align: center;">Klassenbuch Login</h2>
         <div style="display: flex; flex-direction: column; gap: 15px;">
-            <input type="email" id="loginEmail" placeholder="E-Mail (z.B. lehrer@schule.de)">
+            <input type="email" id="loginEmail" placeholder="E-Mail">
             <input type="password" id="loginPassword" placeholder="Passwort">
             <button class="btn btn-primary" onclick="login()">Einloggen</button>
             <p id="loginError" style="color: #ef4444; font-size: 14px; text-align: center; margin: 0;"></p>
@@ -28,7 +28,14 @@
             <div class="user-info">
                 <span id="angemeldeterUser">Lade Profil...</span>
                 <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
+                
+                <select id="klassenAuswahl" onchange="datenLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
+                
                 <input type="date" id="aktuellesDatum" onchange="datenLadenAndRendern()">
+                
+                <button id="adminPanelBtn" class="btn btn-secondary" onclick="zeigeAdminPanel()" style="display:none; margin-left:10px;">⚙ Admin</button>
+                <button id="stundenplanEditBtn" class="btn btn-secondary" onclick="zeigeStundenplanEditor()" style="display:none; margin-left:10px;">📅 Plan bearbeiten</button>
+                
                 <button class="btn btn-secondary" onclick="logout()" style="padding: 4px 10px; margin-left: 15px;">Logout</button>
             </div>
         </header>
@@ -37,9 +44,9 @@
             
             <section id="dashboardView">
                 <div class="section-header">
-                    <h2>Tagesübersicht - Klasse 8rt</h2>
+                    <h2 id="klassenTitel">Tagesübersicht</h2>
                     <div class="info-badges">
-                        <span><strong>Tafeldienst:</strong> Klara Schuhmacher</span>
+                        <span id="klassenleiterInfo"><strong>Klassenleiter:</strong> -</span>
                     </div>
                 </div>
                 
@@ -61,7 +68,7 @@
 
             <section id="detailView" style="display: none;">
                 <div class="detail-top-bar">
-                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück zur Übersicht</button>
+                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
                     <h2 id="detailStundeTitel">Stunden-Details</h2>
                     <button class="btn btn-primary" onclick="stundeSpeichernUndSchliessen()">Unterricht signieren</button>
                 </div>
@@ -74,14 +81,63 @@
                         </div>
                         <div class="card">
                             <h3>Hausaufgaben erstellen</h3>
-                            <textarea id="hausaufgabenInhalt" placeholder="Hausaufgaben für die nächste Stunde..."></textarea>
+                            <textarea id="hausaufgabenInhalt" placeholder="Hausaufgaben..."></textarea>
                         </div>
                     </div>
-
                     <div class="detail-right card">
                         <h3>Schülerübersicht</h3>
-                        <ul class="schueler-anwesenheits-liste" id="schuelerDetailListe">
-                            </ul>
+                        <ul class="schueler-anwesenheits-liste" id="schuelerDetailListe"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="stundenplanEditorView" style="display: none;">
+                <div class="detail-top-bar">
+                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                    <h2>Stundenplan bearbeiten</h2>
+                </div>
+                <div class="card">
+                    <label>Wochentag wählen:</label>
+                    <select id="editWochentag" onchange="ladeEditorPlanForDay()">
+                        <option value="1">Montag</option>
+                        <option value="2">Dienstag</option>
+                        <option value="3">Mittwoch</option>
+                        <option value="4">Donnerstag</option>
+                        <option value="5">Freitag</option>
+                    </select>
+                    <table class="stunden-tabelle" style="margin-top:20px;">
+                        <thead>
+                            <tr>
+                                <th>Stunde</th>
+                                <th>Zeit</th>
+                                <th>Fach</th>
+                                <th>Lehrer-Kürzel</th>
+                            </tr>
+                        </thead>
+                        <tbody id="editorStundenBody">
+                            </tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top:20px;" onclick="speichereStundenplan()">Stundenplan für diesen Tag speichern</button>
+                </div>
+            </section>
+
+            <section id="adminPanelView" style="display: none;">
+                <div class="detail-top-bar">
+                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                    <h2>Admin-Verwaltung</h2>
+                </div>
+                <div class="detail-grid">
+                    <div class="card">
+                        <h3>Klassen verwalten</h3>
+                        <input type="text" id="adminKlassenName" placeholder="z.B. 8rt" style="margin-bottom:10px;"><br>
+                        <input type="text" id="adminKlassenleiterUID" placeholder="Klassenleiter User-UID" style="margin-bottom:10px;"><br>
+                        <button class="btn btn-primary" onclick="adminKlasseErstellen()">Klasse erstellen / aktualisieren</button>
+                    </div>
+                    <div class="card">
+                        <h3>Schüler anlegen & zuweisen</h3>
+                        <input type="text" id="adminSchuelerName" placeholder="Roblox Username" style="margin-bottom:10px;"><br>
+                        <input type="text" id="adminSchuelerKlasse" placeholder="Klasse (z.B. 8rt)" style="margin-bottom:10px;"><br>
+                        <button class="btn btn-primary" onclick="adminSchuelerAnlegen()">Schüler registrieren</button>
                     </div>
                 </div>
             </section>
