@@ -30,8 +30,8 @@
                 <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
                 <span id="schuljahrAnzeige" style="margin-right: 15px; color: var(--warning); font-weight: bold;"></span>
                 
-                <select id="klassenAuswahl" onchange="datenLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
-                <input type="date" id="aktuellesDatum" onchange="datenLadenAndRendern()">
+                <select id="klassenAuswahl" onchange="stundenplanKlasseLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
+                <input type="date" id="aktuellesDatum" onchange="datumGeaendert()">
                 
                 <button id="adminPanelBtn" class="btn btn-secondary" onclick="zeigeAdminPanel()" style="display:none; margin-left:10px;">⚙ Admin</button>
                 <button id="stundenplanEditBtn" class="btn btn-secondary" onclick="zeigeStundenplanEditor()" style="display:none; margin-left:10px;">📅 Plan bearbeiten</button>
@@ -45,8 +45,7 @@
                 <div class="section-header">
                     <h2>Mein Arbeitsbereich</h2>
                     <div class="info-badges">
-                        <span id="wochenTypAnzeige" class="status-badge" style="background: var(--primary); margin-right: 15px;">A-Woche</span>
-                        <span id="klassenleiterInfo" class="status-badge" style="background: var(--bg-input);">Klassenleiter: Lade...</span>
+                        <span id="wochenTypAnzeige" class="status-badge" style="background: var(--primary);">A-Woche</span>
                     </div>
                 </div>
                 
@@ -54,50 +53,44 @@
                     
                     <div class="dashboard-col card">
                         <div class="col-header">
-                            <h3>Abwesenheiten</h3>
-                            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 12px;">+ Info</button>
+                            <h3>Abwesenheiten Heute</h3>
                         </div>
                         <div class="absences-container">
                             <div class="absence-group">
                                 <h4 style="color: var(--success); margin-bottom: 5px;">✔ Entschuldigt</h4>
-                                <ul id="listeEntschuldigt" class="dashboard-list">
-                                    <li style="color: #64748b; font-style: italic;">Keine Einträge</li>
-                                </ul>
+                                <ul id="listeEntschuldigt" class="dashboard-list"></ul>
                             </div>
                             <div class="absence-group" style="margin-top: 15px;">
                                 <h4 style="color: var(--warning); margin-bottom: 5px;">⏳ Abgemeldet / Ausflug</h4>
-                                <ul id="listeAbgemeldet" class="dashboard-list">
-                                    <li style="color: #64748b; font-style: italic;">Keine Einträge</li>
-                                </ul>
+                                <ul id="listeAbgemeldet" class="dashboard-list"></ul>
                             </div>
                             <div class="absence-group" style="margin-top: 15px;">
                                 <h4 style="color: var(--danger); margin-bottom: 5px;">❌ Unentschuldigt</h4>
-                                <ul id="listeUnentschuldigt" class="dashboard-list">
-                                    <li style="color: #64748b; font-style: italic;">Keine Einträge</li>
-                                </ul>
+                                <ul id="listeUnentschuldigt" class="dashboard-list"></ul>
                             </div>
                         </div>
                     </div>
 
                     <div class="dashboard-col card">
-                        <h3>Tagesübersicht Stundenplan</h3>
+                        <h3>Mein heutiger Unterricht</h3>
                         <table class="stunden-tabelle mini-tabelle">
                             <thead>
                                 <tr>
-                                    <th>Stunde</th>
-                                    <th>Unterricht</th>
-                                    <th>Thema</th>
-                                    <th>Lehrer</th>
+                                    <th>Std.</th>
+                                    <th>Klasse</th>
+                                    <th>Fach</th>
+                                    <th>Raum/Info</th>
                                     <th>Aktion</th>
                                 </tr>
                             </thead>
-                            <tbody id="tagesStundenBody"></tbody>
+                            <tbody id="lehrerStundenBody">
+                                </tbody>
                         </table>
 
-                        <h3 style="margin-top: 25px;">Aufgaben</h3>
+                        <h3 style="margin-top: 25px;">Offene Aufgaben</h3>
                         <div class="todo-box">
                             <div class="todo-item alert-warning">
-                                <span>Nicht signierter Unterricht vorhanden</span>
+                                <span>Nicht signierte Stunden</span>
                                 <span class="badge-count" id="countUnsigniert">0</span>
                             </div>
                         </div>
@@ -106,15 +99,15 @@
                     <div class="dashboard-col">
                         
                         <div class="card">
-                            <h3>Klassenbuch-Schnellzugriff</h3>
-                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Deine Standard-Klassen im Unterricht:</p>
+                            <h3>Klassenbuch</h3>
+                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Deine Standard-Klassen im Fachunterricht:</p>
                             <div class="quick-links-grid" id="meineKlassenLinks">
                                 </div>
                         </div>
 
                         <div class="card" style="margin-top: 20px;">
                             <h3>Stundenplan anderer Klassen</h3>
-                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Für Vertretungen oder fachfremde Klassenbücher:</p>
+                            <p style="font-size: 13px; color: #94a3b8; margin-top: -5px; margin-bottom: 15px;">Klassenbuch einer fremden Klasse aufrufen (z.B. Vertretung):</p>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <select id="klassenAuswahlDashboard" style="width: 100%;">
                                     <option value="">-- Klasse wählen --</option>
@@ -128,10 +121,36 @@
                 </div>
             </section>
 
+            <section id="klassenbuchView" style="display: none;">
+                <div class="section-header">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zum Arbeitsbereich</button>
+                        <h2 id="klassenTitel">Klassenbuch Übersicht</h2>
+                    </div>
+                    <div class="info-badges">
+                        <span id="klassenleiterInfo" class="status-badge" style="background: var(--bg-input);">Klassenleiter: Lade...</span>
+                    </div>
+                </div>
+                
+                <table class="stunden-tabelle">
+                    <thead>
+                        <tr>
+                            <th>Stunde</th>
+                            <th>Unterricht</th>
+                            <th>Unterrichtsthema</th>
+                            <th>Hausaufgaben</th>
+                            <th>Lehrer</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tagesStundenBody"></tbody>
+                </table>
+            </section>
+
             <section id="detailView" style="display: none;">
                 <div class="detail-top-bar">
                     <div>
-                        <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                        <button class="btn btn-secondary" onclick="zurueckAusDetails()">🡠 Zurück</button>
                     </div>
                     <h2 id="detailStundeTitel">Stunden-Details</h2>
                     
@@ -165,7 +184,7 @@
 
             <section id="stundenplanEditorView" style="display: none;">
                 <div class="detail-top-bar">
-                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                    <button class="btn btn-secondary" onclick="zurueckAusDetails()">🡠 Zurück</button>
                     <h2>Stundenplan bearbeiten</h2>
                 </div>
                 <div class="card" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
