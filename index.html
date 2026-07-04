@@ -28,16 +28,13 @@
             <div class="user-info">
                 <span id="angemeldeterUser">Lade Profil...</span>
                 <span id="userRolleBadge" class="status-badge user-badge">Lehrer</span>
-                
                 <span id="schuljahrAnzeige" style="margin-right: 15px; color: var(--warning); font-weight: bold;"></span>
                 
                 <select id="klassenAuswahl" onchange="datenLadenAndRendern()" style="margin-right: 10px; display:none;"></select>
-                
                 <input type="date" id="aktuellesDatum" onchange="datenLadenAndRendern()">
                 
                 <button id="adminPanelBtn" class="btn btn-secondary" onclick="zeigeAdminPanel()" style="display:none; margin-left:10px;">⚙ Admin</button>
                 <button id="stundenplanEditBtn" class="btn btn-secondary" onclick="zeigeStundenplanEditor()" style="display:none; margin-left:10px;">📅 Plan bearbeiten</button>
-                
                 <button class="btn btn-secondary" onclick="logout()" style="padding: 4px 10px; margin-left: 15px;">Logout</button>
             </div>
         </header>
@@ -63,17 +60,26 @@
                             <th>Aktion</th>
                         </tr>
                     </thead>
-                    <tbody id="tagesStundenBody">
-                        </tbody>
+                    <tbody id="tagesStundenBody"></tbody>
                 </table>
             </section>
 
             <section id="detailView" style="display: none;">
                 <div class="detail-top-bar">
-                    <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                    <div>
+                        <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
+                    </div>
                     <h2 id="detailStundeTitel">Stunden-Details</h2>
-                    <button class="btn btn-primary" onclick="stundeSpeichernUndSchliessen()">Unterricht signieren</button>
+                    
+                    <div id="detailAktionsButtons" style="display: flex; gap: 10px;">
+                        <button id="btnUnterrichtAendern" class="btn btn-secondary" onclick="unterrichtAendernDialog()">Unterricht ändern / Ausfall</button>
+                        <button id="btnUnterrichtUebernehmen" class="btn btn-secondary" onclick="unterrichtUebernehmenDialog()">Unterricht übernehmen</button>
+                        <button id="btnUnterrichtSignieren" class="btn btn-primary" onclick="stundeSignieren()">Unterricht signieren</button>
+                        <button id="btnSignumZuruecknehmen" class="btn btn-danger" onclick="signumZuruecknehmen()" style="display:none;">Signum zurücknehmen</button>
+                    </div>
                 </div>
+
+                <div id="statusHinweisBox" style="display:none; padding:10px; border-radius:4px; margin-bottom:15px; text-align:center; font-weight:bold;"></div>
 
                 <div class="detail-grid">
                     <div class="detail-left">
@@ -116,8 +122,7 @@
                                 <th>Lehrer-Kürzel</th>
                             </tr>
                         </thead>
-                        <tbody id="editorStundenBody">
-                            </tbody>
+                        <tbody id="editorStundenBody"></tbody>
                     </table>
                     <button class="btn btn-primary" style="margin-top:20px;" onclick="speichereStundenplan()">Stundenplan speichern</button>
                 </div>
@@ -128,7 +133,6 @@
                     <button class="btn btn-secondary" onclick="zeigeDashboard()">🡠 Zurück</button>
                     <h2>Admin-Verwaltung</h2>
                 </div>
-                
                 <div style="margin-bottom: 20px; display: flex; gap: 10px;">
                     <button class="btn btn-primary" id="btnTabKlassen" onclick="wechsleAdminTab('klassen')">Klassen & Schüler</button>
                     <button class="btn btn-secondary" id="btnTabEinstellungen" onclick="wechsleAdminTab('einstellungen')">Grundeinstellungen & Lehrer</button>
@@ -166,14 +170,10 @@
                                 <input type="date" id="setupEndDatum" style="width:100%;">
                             </div>
                         </div>
-
-                        <h3>Unterrichtszeiten definieren (Bis zu 8 Stunden)</h3>
+                        <h3>Unterrichtszeiten definieren</h3>
                         <table class="stunden-tabelle" style="max-width: 500px;">
                             <thead>
-                                <tr>
-                                    <th>Stunde</th>
-                                    <th>Zeitspanne (z.B. 07:20 - 08:05)</th>
-                                </tr>
+                                <tr><th>Stunde</th><th>Zeitspanne</th></tr>
                             </thead>
                             <tbody id="setupZeitenBody"></tbody>
                         </table>
@@ -181,18 +181,18 @@
                     </div>
 
                     <div class="card">
-                        <h3>Lehrer-Profile anlegen (UID zu Name & Kürzel)</h3>
+                        <h3>Lehrer-Profile anlegen</h3>
                         <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 15px; margin-bottom: 15px;">
                             <div>
-                                <label>Voller Name (z.B. Herr Roit):</label>
+                                <label>Voller Name:</label>
                                 <input type="text" id="setupLehrerName" placeholder="Herr Roit" style="width:100%;">
                             </div>
                             <div>
-                                <label>Kürzel (z.B. ROIT):</label>
+                                <label>Kürzel:</label>
                                 <input type="text" id="setupLehrerKuerzel" placeholder="ROIT" style="width:100%;">
                             </div>
                             <div>
-                                <label>User-UID aus Authentication:</label>
+                                <label>User-UID:</label>
                                 <input type="text" id="setupLehrerUID" placeholder="4kLp9x..." style="width:100%;">
                             </div>
                         </div>
