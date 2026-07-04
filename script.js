@@ -1,131 +1,139 @@
-// Globale Variablen für den aktuellen Zustand
-let gewaehlteStunde = null;
+// Dummy-Datenbank für Schüler & Beispiel-Stundenplan
+const StandardSchueler = ["Lasse Neumann", "Klara Schuhmacher", "Maximilian Weber", "Emma Fischer"];
+const StundenPlanStruktur = [
+    { std: 1, zeit: "07:20 - 08:05", fach: "DE / Deu", lehrer: "ROIT" },
+    { std: 2, zeit: "08:15 - 09:00", fach: "DE / Deu", lehrer: "ROIT" },
+    { std: 3, zeit: "09:00 - 09:45", fach: "MA / Mat", lehrer: "ROIT" },
+    { std: 4, zeit: "10:00 - 10:45", fach: "MA / Mat", lehrer: "ROIT" },
+    { std: 5, zeit: "10:45 - 11:30", fach: "INF", lehrer: "FINN" }
+];
 
-// Beim Start heutiges Datum setzen und Daten laden
+let gewaehlteStundeNummer = null;
+
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("aktuellesDatum").valueAsDate = new Date();
-    stundenButtonsErstellen();
-    ansichtAktualisieren();
+    datenLadenAndRendern();
 });
 
-// Erstellt die Buttons für die Schulstunden (1. bis 6. Stunde)
-function stundenButtonsErstellen() {
-    const container = document.getElementById("stundenListe");
-    container.innerHTML = "";
-    for (let i = 1; i <= 6; i++) {
-        let btn = document.createElement("button");
-        btn.className = "stunde-btn";
-        btn.innerText = `${i}. Std`;
-        btn.onclick = () => stundeWaehlen(i, btn);
-        container.appendChild(btn);
+function datenHolen() {
+    let daten = localStorage.getItem("fuxKlassenbuchData");
+    if (!daten) {
+        return { eintraege: {} }; // Struktur für Datums- & Stundeneinträge
     }
+    return JSON.parse(daten);
 }
 
-function stundeWaehlen(stunde, button) {
-    gewaehlteStunde = stunde;
-    
-    // Aktiven Button blau färben
-    document.querySelectorAll(".stunde-btn").forEach(b => b.classList.remove("active"));
-    button.classList.add("active");
-    
-    document.getElementById("aktuelleStundeTitel").innerText = `${stunde}. Schulstunde`;
-    document.getElementById("anwesenheitsTabelle").style.display = "table";
-    
-    tabelleAnzeigen();
+function datenSpeichern(daten) {
+    localStorage.setItem("fuxKlassenbuchData", JSON.stringify(daten));
 }
 
-function ansichtAktualisieren() {
-    if (gewaehlteStunde) {
-        tabelleAnzeigen();
-    }
-}
-
-// Schüler zur allgemeinen Datenbank hinzufügen
-function schuelerHinzufuegen() {
-    let input = document.getElementById("neuerSchuelerName");
-    let name = input.value.trim();
-    if (name === "") return;
-
-    let daten = holenAusSpeicher();
-    if (!daten.schueler.includes(name)) {
-        daten.schueler.push(name);
-        speichernInSpeicher(daten);
-    }
-    input.value = "";
-    tabelleAnzeigen();
-}
-
-// Ändert den Status für ein bestimmtes Datum und eine bestimmte Stunde
-function statusAendern(schuelerName, neuerStatus) {
+function datenLadenAndRendern() {
     let datum = document.getElementById("aktuellesDatum").value;
-    let daten = holenAusSpeicher();
-    
-    // Schlüssel-Format für den Speicher: "2026-07-04_Stunde1"
-    let key = `${datum}_Std${gewaehlteStunde}`;
-    
-    if (!daten.eintraege[key]) {
-        daten.eintraege[key] = {};
-    }
-    
-    daten.eintraege[key][schuelerName] = neuerStatus;
-    speichernInSpeicher(daten);
-}
-
-function tabelleAnzeigen() {
-    if (!gewaehlteStunde) return;
-    
-    let tbody = document.getElementById("schuelerListeAnwesenheit");
+    let db = datenHolen();
+    let tbody = document.getElementById("tagesStundenBody");
     tbody.innerHTML = "";
-    
-    let datum = document.getElementById("aktuellesDatum").value;
-    let rolle = document.getElementById("aktuelleRolle").value;
-    let daten = holenAusSpeicher();
-    
-    let key = `${datum}_Std${gewaehlteStunde}`;
-    let heutigeEintraege = daten.eintraege[key] || {};
 
-    daten.schueler.forEach(name => {
-        let aktuellerStatus = heutigeEintraege[name] || "Anwesend";
-        let row = document.createElement("tr");
+    StundenPlanStruktur.forEach(stunde => {
+        let key = `${datum}_Std${stunde.std}`;
+        let stundenDaten = db.eintraege[key] || { thema: "", hausaufgaben: "" };
         
-        // Berechtigungs-Logik für das Dropdown-Menü
+        let row = document.createElement("tr");
+        row.innerHTML = `
+            <td><strong>${stunde.std}</strong> <br><small>${stunde.zeit}</small></td>
+            <td><span class="btn btn-secondary">${stunde.fach}</span></td>
+            <td>${stundenDaten.thema || "<em>Kein Eintrag</em>"}</td>
+            <td>${stundenDaten.hausaufgaben || "-"}</td>
+            <td>${stunde.lehrer}</td>
+            <td><button class="btn btn-primary" onclick="oeffneStunde(${stunde.std})">Bearbeiten</button></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function oeffneStunde(stdNummer) {
+    gewaehlteStundeNummer = stdNummer;
+    let datum = document.getElementById("aktuellesDatum").value;
+    let stundenInfo = StundenPlanStruktur.find(s => s.std === stdNummer);
+    
+    document.getElementById("detailStundeTitel").innerText = `${datum} - ${stundenInfo.std}. Std (${stundenInfo.fach})`;
+    
+    let db = datenHolen();
+    let key = `${datum}_Std${stdNummer}`;
+    let detail = db.eintraege[key] || { thema: "", hausaufgaben: "", anwesenheit: {} };
+    
+    // Inputs füllen
+    document.getElementById("unterrichtsInhalt").value = detail.thema || "";
+    document.getElementById("hausaufgabenInhalt").value = detail.hausaufgaben || "";
+    
+    // Anwesenheitsliste rendern
+    let listeUl = document.getElementById("schuelerDetailListe");
+    listeUl.innerHTML = "";
+    
+    let rolle = document.getElementById("aktuelleRolle").value;
+
+    StandardSchueler.forEach(name => {
+        let aktuellerStatus = detail.anwesenheit[name] || "Anwesend";
+        
+        let li = document.createElement("li");
+        li.className = "schueler-item";
+        
         let optionen = `
             <option value="Anwesend" ${aktuellerStatus === 'Anwesend' ? 'selected' : ''}>Anwesend</option>
             <option value="Unentschuldigt" ${aktuellerStatus === 'Unentschuldigt' ? 'selected' : ''}>Unentschuldigt fehlt</option>
             <option value="Verspätet" ${aktuellerStatus === 'Verspätet' ? 'selected' : ''}>Verspätet</option>
         `;
         
-        // Klassenleiter und Sekretariat dürfen MEHR Optionen sehen/wählen
+        // Rechteprüfung für Sekretariat und Klassenleiter
         if (rolle === "Klassenleiter" || rolle === "Sekretariat") {
             optionen += `
                 <option value="Entschuldigt" ${aktuellerStatus === 'Entschuldigt' ? 'selected' : ''}>Entschuldigt</option>
                 <option value="Freigestellt" ${aktuellerStatus === 'Freigestellt' ? 'selected' : ''}>Freigestellt</option>
             `;
-        } else {
-            // Wenn der normale Lehrer aufruft, aber der Schüler bereits entschuldigt ist, zeigen wir es an
-            if (aktuellerStatus === "Entschuldigt" || aktuellerStatus === "Freigestellt") {
-                optionen += `<option value="${aktuellerStatus}" selected disabled>${aktuellerStatus} (durch Admin)</option>`;
-            }
+        } else if (aktuellerStatus === "Entschuldigt" || aktuellerStatus === "Freigestellt") {
+            optionen += `<option value="${aktuellerStatus}" selected disabled>${aktuellerStatus} (gesperrt)</option>`;
         }
 
-        row.innerHTML = `
-            <td><strong>${name}</strong></td>
-            <td>
-                <select class="status-select" onchange="statusAendern('${name}', this.value)">
-                    ${optionen}
-                </select>
-            </td>
+        li.innerHTML = `
+            <span>${name}</span>
+            <select onchange="statusDirektSpeichern('${name}', this.value)" style="background:var(--bg-input); color:white; border:none; padding:5px; border-radius:4px;">
+                ${optionen}
+            </select>
         `;
-        tbody.appendChild(row);
+        listeUl.appendChild(li);
     });
+
+    document.getElementById("dashboardView").style.display = "none";
+    document.getElementById("detailView").style.display = "block";
 }
 
-// Speicher-Hilfsfunktionen
-function speichernInSpeicher(daten) {
-    localStorage.setItem("robloxKlassenbuchErweitert", JSON.stringify(daten));
+function statusDirektSpeichern(schuelerName, neuerStatus) {
+    let datum = document.getElementById("aktuellesDatum").value;
+    let db = datenHolen();
+    let key = `${datum}_Std${gewaehlteStundeNummer}`;
+    
+    if (!db.eintraege[key]) db.eintraege[key] = { thema: "", hausaufgaben: "", anwesenheit: {} };
+    if (!db.eintraege[key].anwesenheit) db.eintraege[key].anwesenheit = {};
+    
+    db.eintraege[key].anwesenheit[schuelerName] = neuerStatus;
+    datenSpeichern(db);
 }
 
-function holenAusSpeicher() {
-    let daten = localStorage.getItem("robloxKlassenbuchErweitert");
-    return daten ? JSON.parse(daten) : { schueler: [], eintraege: {} };
+function stundeSpeichernUndSchliessen() {
+    let datum = document.getElementById("aktuellesDatum").value;
+    let db = datenHolen();
+    let key = `${datum}_Std${gewaehlteStundeNummer}`;
+    
+    if (!db.eintraege[key]) db.eintraege[key] = { thema: "", hausaufgaben: "", anwesenheit: {} };
+    
+    db.eintraege[key].thema = document.getElementById("unterrichtsInhalt").value;
+    db.eintraege[key].hausaufgaben = document.getElementById("hausaufgabenInhalt").value;
+    
+    datenSpeichern(db);
+    zeigeDashboard();
+}
+
+function zeigeDashboard() {
+    document.getElementById("detailView").style.display = "none";
+    document.getElementById("dashboardView").style.display = "block";
+    datenLadenAndRendern();
 }
